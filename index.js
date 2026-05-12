@@ -441,7 +441,7 @@ if (interaction.isChatInputCommand()) {
 
         const taskChannel =
             await client.channels.fetch(
-                'ID_CANAL_EVIDENTA'
+                '1497367152397914302, 1494860985066848357'
             );
 
         // ================= EMBED =================
@@ -545,7 +545,7 @@ if (interaction.isButton()) {
 
         const logChannel =
             await client.channels.fetch(
-                'ID_CANAL_LOGS'
+                '1503906070010269721'
             );
 
         // ================= UPDATED EMBED =================
@@ -583,7 +583,7 @@ if (interaction.isButton()) {
         await logChannel.send({
 
             content:
-                '<@&ID_ROL_CONDUCERE> ' +
+                '<@&1493768690133499926> ' +
                 `Task finalizat de <@${userId}>.`,
 
             embeds: [updatedEmbed]
