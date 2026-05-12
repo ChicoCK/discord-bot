@@ -18,7 +18,6 @@ const {
 } = require('discord.js');
 
 const {
-    token,
     clientId,
     guildId,
     logChannelId,
