@@ -377,6 +377,240 @@ client.on(Events.MessageCreate, async message => {
     }
 });
 
+// ================= REGISTER COMMAND =================
+
+const commands = [
+
+    new SlashCommandBuilder()
+
+        .setName('task')
+
+        .setDescription('Adauga un task')
+
+        .addUserOption(option =>
+
+            option
+
+                .setName('membru')
+
+                .setDescription('Alege membrul')
+
+                .setRequired(true)
+        )
+
+        .addStringOption(option =>
+
+            option
+
+                .setName('cerinta')
+
+                .setDescription('Task-ul membrului')
+
+                .setRequired(true)
+        )
+
+].map(cmd => cmd.toJSON());
+
+// ================= /TASK =================
+
+if (interaction.isChatInputCommand()) {
+
+    if (interaction.commandName === 'task') {
+
+        // doar admini
+
+        if (!interaction.member.permissions.has(
+            PermissionFlagsBits.Administrator
+        )) {
+
+            return interaction.reply({
+
+                content: '❌ Nu ai permisiune.',
+
+                ephemeral: true
+            });
+        }
+
+        const membru =
+            interaction.options.getUser('membru');
+
+        const cerinta =
+            interaction.options.getString('cerinta');
+
+        // canal evidenta
+
+        const taskChannel =
+            await client.channels.fetch(
+                'ID_CANAL_EVIDENTA'
+            );
+
+        // ================= EMBED =================
+
+        const embed = new EmbedBuilder()
+
+            .setTitle('📋 TASK NOU')
+
+            .setColor('Yellow')
+
+            .addFields(
+
+                {
+                    name: '👤 Membru',
+                    value: `<@${membru.id}>`
+                },
+
+                {
+                    name: '📦 Cerinta',
+                    value: cerinta
+                },
+
+                {
+                    name: '📌 Status',
+                    value: '🟡 In progres'
+                }
+            )
+
+            .setFooter({
+
+                text: `TASK USER ID: ${membru.id}`
+            })
+
+            .setTimestamp();
+
+        // ================= BUTTON =================
+
+        const button =
+            new ActionRowBuilder()
+
+                .addComponents(
+
+                    new ButtonBuilder()
+
+                        .setCustomId('task_done')
+
+                        .setLabel('✅ Task Finalizat')
+
+                        .setStyle(ButtonStyle.Success)
+                );
+
+        // ================= SEND =================
+
+        await taskChannel.send({
+
+            content: `<@${membru.id}>`,
+
+            embeds: [embed],
+
+            components: [button]
+        });
+
+        return interaction.reply({
+
+            content: '✅ Task trimis.',
+
+            ephemeral: true
+        });
+    }
+}
+
+// ================= BUTTON =================
+
+if (interaction.isButton()) {
+
+    if (interaction.customId === 'task_done') {
+
+        const embed =
+            interaction.message.embeds[0];
+
+        const userId =
+            embed.footer.text.replace(
+                'TASK USER ID: ',
+                ''
+            );
+
+        // doar persoana taskului
+
+        if (interaction.user.id !== userId) {
+
+            return interaction.reply({
+
+                content:
+                    '❌ Acest task nu este al tau.',
+
+                ephemeral: true
+            });
+        }
+
+        // canal logs
+
+        const logChannel =
+            await client.channels.fetch(
+                'ID_CANAL_LOGS'
+            );
+
+        // ================= UPDATED EMBED =================
+
+        const updatedEmbed =
+            EmbedBuilder.from(embed)
+
+                .setColor('Green')
+
+                .spliceFields(2, 1, {
+
+                    name: '📌 Status',
+
+                    value: '✅ FINALIZAT'
+                });
+
+        // ================= DISABLE BUTTON =================
+
+        const disabledButton =
+            new ActionRowBuilder()
+
+                .addComponents(
+
+                    ButtonBuilder.from(
+
+                        interaction.message
+                            .components[0]
+                            .components[0]
+
+                    ).setDisabled(true)
+                );
+
+        // ================= SEND LOG =================
+
+        await logChannel.send({
+
+            content:
+                '<@&ID_ROL_CONDUCERE> ' +
+                `Task finalizat de <@${userId}>.`,
+
+            embeds: [updatedEmbed]
+        });
+
+        // ================= UPDATE MESSAGE =================
+
+        await interaction.update({
+
+            embeds: [updatedEmbed],
+
+            components: [disabledButton]
+        });
+
+        // ================= PRIVATE MESSAGE =================
+
+        await interaction.followUp({
+
+            content:
+                '✅ Task-ul tau a fost trimis catre conducere.\n' +
+                'Un membru din conducere te va contacta pentru predare.',
+
+            ephemeral: true
+        });
+    }
+}
+
 // ================= LOGIN =================
 
 client.login(process.env.DISCORD_TOKEN);
