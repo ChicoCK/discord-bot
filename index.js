@@ -379,4 +379,4 @@ client.on(Events.MessageCreate, async message => {
 
 // ================= LOGIN =================
 
-client.login(token);
+client.login(process.env.DISCORD_TOKEN);
