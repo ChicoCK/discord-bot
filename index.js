@@ -628,6 +628,21 @@ client.on(Events.InteractionCreate, async interaction => {
                 });
             }
 
+            new SlashCommandBuilder()
+
+    .setName('clearamenzi')
+
+    .setDescription('Sterge toate amenzile unui membru')
+
+    .addUserOption(option =>
+
+        option.setName('membru')
+
+            .setDescription('Membrul')
+
+            .setRequired(true)
+    ),
+                
             // =====================================================
             // /AMENDA
             // =====================================================
