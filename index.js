@@ -1,4 +1,5 @@
 require('dotenv').config();
+
 const {
     Client,
     GatewayIntentBits,
@@ -40,7 +41,7 @@ const client = new Client({
 const applications = new Map();
 const tasks = new Map();
 
-// ================= READY =================
+// ================= REGISTER COMMANDS =================
 client.once(Events.ClientReady, async () => {
 
     console.log(`🤖 Bot pornit ca ${client.user.tag}`);
@@ -52,25 +53,25 @@ client.once(Events.ClientReady, async () => {
 
         new SlashCommandBuilder()
             .setName('task')
-            .setDescription('Creaza un task cu deadline')
-            .addUserOption(option =>
-                option.setName('membru')
-                    .setDescription('Membrul')
+            .setDescription('Creaza task cu data')
+            .addUserOption(o =>
+                o.setName('membru')
+                    .setDescription('Membru')
                     .setRequired(true)
             )
-            .addStringOption(option =>
-                option.setName('cerinta')
+            .addStringOption(o =>
+                o.setName('cerinta')
                     .setDescription('Ex: 500k murdar')
                     .setRequired(true)
             )
-            .addStringOption(option =>
-                option.setName('data')
-                    .setDescription('Deadline data (YYYY-MM-DD)')
+            .addStringOption(o =>
+                o.setName('data')
+                    .setDescription('YYYY-MM-DD')
                     .setRequired(true)
             )
-            .addStringOption(option =>
-                option.setName('ora')
-                    .setDescription('Deadline ora (HH:mm)')
+            .addStringOption(o =>
+                o.setName('ora')
+                    .setDescription('HH:mm')
                     .setRequired(true)
             )
     ].map(cmd => cmd.toJSON());
@@ -83,13 +84,13 @@ client.once(Events.ClientReady, async () => {
             { body: commands }
         );
 
-        console.log('✅ Slash commands înregistrate');
+        console.log('✅ Comenzi înregistrate');
     } catch (err) {
         console.error(err);
     }
 });
 
-// ================= INTERACTIONS =================
+// ================= MAIN HANDLER =================
 client.on(Events.InteractionCreate, async interaction => {
 
     try {
@@ -99,7 +100,7 @@ client.on(Events.InteractionCreate, async interaction => {
 
             if (applications.has(interaction.user.id)) {
                 return interaction.reply({
-                    content: '❌ Ai deja un CV in curs.',
+                    content: '❌ Ai deja un CV activ.',
                     flags: MessageFlags.Ephemeral
                 });
             }
@@ -125,7 +126,6 @@ client.on(Events.InteractionCreate, async interaction => {
             );
 
             modal.addComponents(...fields);
-
             return interaction.showModal(modal);
         }
 
@@ -152,7 +152,7 @@ client.on(Events.InteractionCreate, async interaction => {
                 .addFields(
                     { name: '👤 Membru', value: `<@${user.id}>` },
                     { name: '📦 Cerinta', value: cerinta },
-                    { name: '📅 Deadline', value: `${data} la ${ora}` },
+                    { name: '📅 Deadline', value: `${data} ${ora}` },
                     { name: '📌 Status', value: '🟡 In progres' }
                 )
                 .setFooter({ text: `TASK:${taskId} | USER:${user.id}` })
@@ -165,12 +165,7 @@ client.on(Events.InteractionCreate, async interaction => {
                     .setStyle(ButtonStyle.Success)
             );
 
-            tasks.set(taskId, {
-                userId: user.id,
-                cerinta,
-                data,
-                ora
-            });
+            tasks.set(taskId, { userId: user.id });
 
             const channel = await client.channels.fetch('1497367152397914302');
 
@@ -181,7 +176,7 @@ client.on(Events.InteractionCreate, async interaction => {
             });
 
             return interaction.reply({
-                content: '✅ Task creat cu deadline.',
+                content: '✅ Task creat.',
                 flags: MessageFlags.Ephemeral
             });
         }
@@ -208,7 +203,7 @@ client.on(Events.InteractionCreate, async interaction => {
 
             const logChannel = await client.channels.fetch('1503906070010269721');
 
-            const updated = EmbedBuilder.from(interaction.message.embeds[0])
+            const updatedEmbed = EmbedBuilder.from(interaction.message.embeds[0])
                 .setColor('Green')
                 .spliceFields(3, 1, {
                     name: '📌 Status',
@@ -224,16 +219,16 @@ client.on(Events.InteractionCreate, async interaction => {
             });
 
             await interaction.update({
-                embeds: [updated],
+                embeds: [updatedEmbed],
                 components: [disabled]
             });
 
-            await interaction.followUp({
-                content: '✅ Task trimis spre conducere.',
+            tasks.delete(taskId);
+
+            return interaction.followUp({
+                content: '✅ Task trimis la conducere.',
                 flags: MessageFlags.Ephemeral
             });
-
-            tasks.delete(taskId);
         }
 
         // ================= CV MODAL =================
@@ -252,6 +247,90 @@ client.on(Events.InteractionCreate, async interaction => {
                 flags: MessageFlags.Ephemeral
             });
         }
+
+        // ================= BUTTON CV =================
+        if (interaction.isButton()) {
+
+            const embed = interaction.message.embeds[0];
+            const userId = embed.footer?.text?.replace('USER ID: ', '');
+
+            if (!userId) return;
+
+            const member = await interaction.guild.members.fetch(userId);
+
+            // ACCEPT
+            if (interaction.customId === 'accept_cv') {
+
+                await member.roles.add(acceptedRoleIds);
+
+                const logChannel = await client.channels.fetch(logChannelId);
+
+                await logChannel.send(`📢 CV ACCEPTAT de ${interaction.user.tag} pentru <@${userId}>`);
+
+                return interaction.reply({
+                    content: '✅ CV acceptat',
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+
+            // DECLINE
+            if (interaction.customId === 'decline_cv') {
+
+                const logChannel = await client.channels.fetch(logChannelId);
+
+                await logChannel.send(`📢 CV RESPINS de ${interaction.user.tag} pentru <@${userId}>`);
+
+                return interaction.reply({
+                    content: '❌ CV respins',
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+        }
+
+    } catch (err) {
+        console.error(err);
+    }
+});
+
+// ================= CV MESSAGE (FIXED) =================
+client.on(Events.MessageCreate, async message => {
+
+    try {
+
+        if (message.author.bot) return;
+        if (!applications.has(message.author.id)) return;
+        if (message.attachments.size === 0) return;
+
+        const data = applications.get(message.author.id);
+        applications.delete(message.author.id);
+
+        const attachment = message.attachments.first();
+
+        const logChannel = await client.channels.fetch(logChannelId);
+
+        const embed = new EmbedBuilder()
+            .setTitle('📋 CV NOU')
+            .setColor('Red')
+            .addFields(
+                { name: '👤 Nume', value: data.nume },
+                { name: '🆔 CNP', value: data.cnp },
+                { name: '📅 Luni', value: data.luni },
+                { name: '👨‍💼 Angajator', value: data.angajator },
+                { name: '📱 Telefon', value: data.telefon }
+            )
+            .setImage('attachment://buletin.png')
+            .setFooter({ text: `USER ID: ${message.author.id}` });
+
+        await logChannel.send({
+            embeds: [embed],
+            files: [{
+                attachment: attachment.url,
+                name: 'buletin.png'
+            }]
+        });
+
+        await message.delete().catch(() => {});
+        await message.author.send('✅ CV trimis spre verificare').catch(() => {});
 
     } catch (err) {
         console.error(err);
