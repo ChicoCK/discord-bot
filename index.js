@@ -38,7 +38,7 @@ const client = new Client({
 
 // ================= STORAGE =================
 const applications = new Map();
-const tasks = new Map(); // 🔥 TASK STORAGE
+const tasks = new Map();
 
 // ================= READY =================
 client.once(Events.ClientReady, async () => {
@@ -52,7 +52,7 @@ client.once(Events.ClientReady, async () => {
 
         new SlashCommandBuilder()
             .setName('task')
-            .setDescription('Creaza un task')
+            .setDescription('Creaza un task cu deadline')
             .addUserOption(option =>
                 option.setName('membru')
                     .setDescription('Membrul')
@@ -61,6 +61,16 @@ client.once(Events.ClientReady, async () => {
             .addStringOption(option =>
                 option.setName('cerinta')
                     .setDescription('Ex: 500k murdar')
+                    .setRequired(true)
+            )
+            .addStringOption(option =>
+                option.setName('data')
+                    .setDescription('Deadline data (YYYY-MM-DD)')
+                    .setRequired(true)
+            )
+            .addStringOption(option =>
+                option.setName('ora')
+                    .setDescription('Deadline ora (HH:mm)')
                     .setRequired(true)
             )
     ].map(cmd => cmd.toJSON());
@@ -131,6 +141,8 @@ client.on(Events.InteractionCreate, async interaction => {
 
             const user = interaction.options.getUser('membru');
             const cerinta = interaction.options.getString('cerinta');
+            const data = interaction.options.getString('data');
+            const ora = interaction.options.getString('ora');
 
             const taskId = Date.now().toString();
 
@@ -140,6 +152,7 @@ client.on(Events.InteractionCreate, async interaction => {
                 .addFields(
                     { name: '👤 Membru', value: `<@${user.id}>` },
                     { name: '📦 Cerinta', value: cerinta },
+                    { name: '📅 Deadline', value: `${data} la ${ora}` },
                     { name: '📌 Status', value: '🟡 In progres' }
                 )
                 .setFooter({ text: `TASK:${taskId} | USER:${user.id}` })
@@ -154,7 +167,9 @@ client.on(Events.InteractionCreate, async interaction => {
 
             tasks.set(taskId, {
                 userId: user.id,
-                cerinta
+                cerinta,
+                data,
+                ora
             });
 
             const channel = await client.channels.fetch('1497367152397914302');
@@ -166,12 +181,12 @@ client.on(Events.InteractionCreate, async interaction => {
             });
 
             return interaction.reply({
-                content: '✅ Task creat.',
+                content: '✅ Task creat cu deadline.',
                 flags: MessageFlags.Ephemeral
             });
         }
 
-        // ================= BUTTON TASK =================
+        // ================= TASK DONE =================
         if (interaction.isButton() && interaction.customId.startsWith('task_done_')) {
 
             const taskId = interaction.customId.split('_')[2];
@@ -195,7 +210,7 @@ client.on(Events.InteractionCreate, async interaction => {
 
             const updated = EmbedBuilder.from(interaction.message.embeds[0])
                 .setColor('Green')
-                .spliceFields(2, 1, {
+                .spliceFields(3, 1, {
                     name: '📌 Status',
                     value: '✅ FINALIZAT'
                 });
