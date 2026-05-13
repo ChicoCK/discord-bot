@@ -346,115 +346,67 @@ if (interaction.isButton()) {
         });
     }
 
-    // DECLINE
+// DECLINE
+if (interaction.customId === 'decline_cv') {
 
-    if (interaction.customId === 'decline_cv') {
+    await member.send('❌ Aplicatia ta a fost RESPINSA.').catch(() => {});
 
-        await member.send(
-            '❌ Aplicatia ta a fost RESPINSA.'
-        ).catch(() => {});
+    const logChannel = await client.channels.fetch(logChannelId);
 
-        const logChannel = await client.channels.fetch(logChannelId);
+    await logChannel.send(
+        `📢 Supervizorul ${interaction.user.tag} a RESPINS CV-ul lui <@${userId}> !`
+    );
 
-        await logChannel.send(
-            `📢 Supervizorul ${interaction.user.tag} a RESPINS CV-ul lui <@${userId}> !`
-        );
+    return await interaction.reply({
+        content: '❌ CV respins.',
+        flags: MessageFlags.Ephemeral
+    });
+}
 
-        return await interaction.reply({
-
-            content: '❌ CV respins.',
-
-            flags: MessageFlags.Ephemeral
-        });
-
-        // ================= TASK DONE =================
-
+// ================= TASK DONE =================
 if (interaction.customId === 'task_done') {
 
-    const embed =
-        interaction.message.embeds[0];
+    const embed = interaction.message.embeds[0];
 
-    const userId =
-        embed.footer.text.replace(
-            'TASK USER ID: ',
-            ''
-        );
+    const userId = embed.footer.text.replace('TASK USER ID: ', '');
 
     if (interaction.user.id !== userId) {
-
         return interaction.reply({
-
-            content:
-                '❌ Acest task nu este al tau.',
-
+            content: '❌ Acest task nu este al tau.',
             flags: MessageFlags.Ephemeral
         });
     }
 
-    const logChannel =
-        await client.channels.fetch(
-            '1503906070010269721'
-        );
+    const logChannel = await client.channels.fetch('1503906070010269721');
 
-    const updatedEmbed =
-        EmbedBuilder.from(embed)
+    const updatedEmbed = EmbedBuilder.from(embed)
+        .setColor('Green')
+        .spliceFields(2, 1, {
+            name: '📌 Status',
+            value: '✅ FINALIZAT'
+        });
 
-            .setColor('Green')
-
-            .spliceFields(2, 1, {
-
-                name: '📌 Status',
-
-                value: '✅ FINALIZAT'
-            });
-
-    const disabledButton =
-        new ActionRowBuilder()
-
-            .addComponents(
-
-                ButtonBuilder.from(
-
-                    interaction.message
-                        .components[0]
-                        .components[0]
-
-                ).setDisabled(true)
-            );
+    const disabledButton = new ActionRowBuilder().addComponents(
+        ButtonBuilder.from(
+            interaction.message.components[0].components[0]
+        ).setDisabled(true)
+    );
 
     await logChannel.send({
-
-        content:
-            '<@&1493768690133499926> ' +
-            `Task finalizat de <@${userId}>.`,
-
+        content: `<@&1493768690133499926> Task finalizat de <@${userId}>.`,
         embeds: [updatedEmbed]
     });
 
     await interaction.update({
-
         embeds: [updatedEmbed],
-
         components: [disabledButton]
     });
 
-    await interaction.followUp({
-
-        content:
-            '✅ Task-ul tau a fost trimis catre conducere.\n' +
-            'Un membru din conducere te va contacta pentru predare.',
-
+    return interaction.followUp({
+        content: '✅ Task-ul tau a fost trimis catre conducere.',
         flags: MessageFlags.Ephemeral
     });
 }
-    }
-}
-
-    } catch (err) {
-
-        console.error(err);
-    }
-}); // 🔴 FIX: aici era eroarea (închidere corectă a InteractionCreate)
 
 // ================= MESSAGE CREATE =================
 
