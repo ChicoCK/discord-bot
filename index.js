@@ -48,7 +48,7 @@ const tasks = new Map();
 // ================= CONFIG TASK =================
 
 // CHANNEL unde se posteaza task-urile
-const taskChannelId = '1497367152397914302';
+const taskChannelId = '1494860985066848357';
 
 // CHANNEL logs task
 const taskLogsChannelId = '1503906070010269721';
