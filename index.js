@@ -179,18 +179,77 @@ client.on(Events.InteractionCreate, async interaction => {
                 });
             }
 
-            // ================= TASK DONE =================
-            if (interaction.customId.startsWith('task_done_')) {
+           if (interaction.isButton() && interaction.customId.startsWith('task_done_')) {
 
-                const taskId = interaction.customId.split('_')[2];
-                const task = tasks.get(taskId);
+    try {
 
-                if (!task) {
-                    return interaction.reply({
-                        content: '❌ Task invalid',
-                        flags: MessageFlags.Ephemeral
-                    });
-                }
+        const taskId = interaction.customId.replace('task_done_', '');
+        const task = tasks.get(taskId);
+
+        if (!task) {
+            return interaction.reply({
+                content: '❌ Task invalid sau expirat',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
+        const member = await interaction.guild.members.fetch(interaction.user.id);
+
+        const isOwner = interaction.user.id === task.userId;
+
+        const isStaff = member.roles.cache.some(r =>
+            acceptedRoleIds.includes(r.id)
+        );
+
+        if (!isOwner && !isStaff) {
+            return interaction.reply({
+                content: '❌ Nu ai voie sa finalizezi acest task.',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
+        // IMPORTANT: răspundem INSTANT ca să nu expire interaction-ul
+        await interaction.deferUpdate();
+
+        const log = await client.channels.fetch(logChannelId);
+
+        const embed = EmbedBuilder.from(interaction.message.embeds[0])
+            .setColor('Green')
+            .addFields({
+                name: '📌 Status',
+                value: '🟡 PREGATIT PENTRU PREDARE'
+            });
+
+        await log.send(
+            `<@&1493768690133499926> <@${task.userId}> este pregatit pentru predarea task-ului.`
+        );
+
+        await interaction.message.edit({
+            embeds: [embed],
+            components: [
+                new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`task_done_${taskId}`)
+                        .setLabel('Task Finalizat')
+                        .setStyle(ButtonStyle.Success)
+                        .setDisabled(true)
+                )
+            ]
+        });
+
+        tasks.delete(taskId);
+
+    } catch (err) {
+        console.error('TASK BUTTON ERROR:', err);
+
+        if (!interaction.replied && !interaction.deferred) {
+            await interaction.reply({
+                content: '❌ Eroare la finalizarea task-ului',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+    }
+}
 
                 const member = await interaction.guild.members.fetch(interaction.user.id);
 
