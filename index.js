@@ -173,6 +173,20 @@ client.once(Events.ClientReady, async () => {
                     .setRequired(true)
             ),
 
+        new SlashCommandBuilder()
+
+    .setName('clearamenzi')
+
+    .setDescription('Sterge toate amenzile unui membru')
+
+    .addUserOption(option =>
+
+        option.setName('membru')
+
+            .setDescription('Membrul')
+
+            .setRequired(true)
+    ),
         // ================= AMENZI =================
 
         new SlashCommandBuilder()
@@ -628,21 +642,6 @@ client.on(Events.InteractionCreate, async interaction => {
                 });
             }
 
-            new SlashCommandBuilder()
-
-    .setName('clearamenzi')
-
-    .setDescription('Sterge toate amenzile unui membru')
-
-    .addUserOption(option =>
-
-        option.setName('membru')
-
-            .setDescription('Membrul')
-
-            .setRequired(true)
-    ),
-                
             // =====================================================
             // /AMENDA
             // =====================================================
@@ -730,6 +729,72 @@ client.on(Events.InteractionCreate, async interaction => {
                 });
             }
 
+            if (interaction.commandName === 'clearamenzi') {
+
+    const isLeadership = interaction.member.roles.cache.some(role =>
+        leadershipRoleIds.includes(role.id)
+    );
+
+    if (!isLeadership) {
+
+        return interaction.reply({
+
+            content: '❌ Nu ai permisiune.',
+
+            flags: MessageFlags.Ephemeral
+        });
+    }
+
+    const user = interaction.options.getUser('membru');
+
+    if (!amenzi.has(user.id)) {
+
+        return interaction.reply({
+
+            content: 'ℹ️ Acest membru nu are amenzi.',
+
+            flags: MessageFlags.Ephemeral
+        });
+    }
+
+    const total = amenzi.get(user.id).reduce((acc, a) => acc + a.suma, 0);
+
+    amenzi.delete(user.id);
+
+    const logChannel = await client.channels.fetch(logChannelId);
+
+    await logChannel.send({
+
+        embeds: [
+            new EmbedBuilder()
+                .setTitle('💸 AMENZI RESETATE')
+                .setColor('Green')
+                .addFields(
+                    {
+                        name: '👤 Membru',
+                        value: `<@${user.id}>`
+                    },
+                    {
+                        name: '🛡️ De către',
+                        value: interaction.user.tag
+                    },
+                    {
+                        name: '💰 Total șters',
+                        value: `${total}$`
+                    }
+                )
+                .setTimestamp()
+        ]
+    });
+
+    return interaction.reply({
+
+        content: `✅ Amenzile lui ${user.tag} au fost șterse.`,
+
+        flags: MessageFlags.Ephemeral
+    });
+}
+            
             // =====================================================
             // /AMENZI
             // =====================================================
