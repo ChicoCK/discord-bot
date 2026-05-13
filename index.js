@@ -45,15 +45,14 @@ const client = new Client({
 const applications = new Map();
 const tasks = new Map();
 
+const warns = new Map();
+const amenzi = new Map();
+
 // ================= CONFIG TASK =================
 
-// CHANNEL unde se posteaza task-urile
 const taskChannelId = '1494860985066848357';
-
-// CHANNEL logs task
 const taskLogsChannelId = '1503906070010269721';
 
-// ROLE conducere
 const leadershipRoleIds = [
     '1493768690133499926'
 ];
@@ -116,6 +115,129 @@ client.once(Events.ClientReady, async () => {
                     .setDescription('Ora deadline')
 
                     .setRequired(true)
+            ),
+
+        // ================= WARN =================
+
+        new SlashCommandBuilder()
+
+            .setName('warn')
+
+            .setDescription('Acorda warn')
+
+            .addUserOption(option =>
+
+                option.setName('membru')
+
+                    .setDescription('Membrul')
+
+                    .setRequired(true)
+            )
+
+            .addStringOption(option =>
+
+                option.setName('motiv')
+
+                    .setDescription('Motivul')
+
+                    .setRequired(true)
+            ),
+
+        new SlashCommandBuilder()
+
+            .setName('warns')
+
+            .setDescription('Vezi warn-urile')
+
+            .addUserOption(option =>
+
+                option.setName('membru')
+
+                    .setDescription('Membrul')
+
+                    .setRequired(true)
+            ),
+
+        new SlashCommandBuilder()
+
+            .setName('clearwarns')
+
+            .setDescription('Sterge warn-urile')
+
+            .addUserOption(option =>
+
+                option.setName('membru')
+
+                    .setDescription('Membrul')
+
+                    .setRequired(true)
+            ),
+
+        // ================= AMENZI =================
+
+        new SlashCommandBuilder()
+
+            .setName('amenda')
+
+            .setDescription('Acorda amenda')
+
+            .addUserOption(option =>
+
+                option.setName('membru')
+
+                    .setDescription('Membrul')
+
+                    .setRequired(true)
+            )
+
+            .addIntegerOption(option =>
+
+                option.setName('suma')
+
+                    .setDescription('Suma')
+
+                    .setRequired(true)
+            )
+
+            .addStringOption(option =>
+
+                option.setName('motiv')
+
+                    .setDescription('Motiv')
+
+                    .setRequired(true)
+            ),
+
+        new SlashCommandBuilder()
+
+            .setName('amenzi')
+
+            .setDescription('Vezi amenzile')
+
+            .addUserOption(option =>
+
+                option.setName('membru')
+
+                    .setDescription('Membrul')
+
+                    .setRequired(true)
+            ),
+
+        // ================= PROFIL =================
+
+        new SlashCommandBuilder()
+
+            .setName('profil')
+
+            .setDescription('Vezi profilul')
+
+            .addUserOption(option =>
+
+                option.setName('membru')
+
+                    .setDescription('Membrul')
+
+                    .setRequired(true)
             )
 
     ].map(cmd => cmd.toJSON());
@@ -157,13 +279,11 @@ client.on(Events.InteractionCreate, async interaction => {
 
     try {
 
-        // =====================================================
-        // /CV
-        // =====================================================
-
         if (interaction.isChatInputCommand()) {
 
-            // ================= CV =================
+            // =====================================================
+            // /CV
+            // =====================================================
 
             if (interaction.commandName === 'cv') {
 
@@ -351,6 +471,356 @@ client.on(Events.InteractionCreate, async interaction => {
                     flags: MessageFlags.Ephemeral
                 });
             }
+
+            // =====================================================
+            // /WARN
+            // =====================================================
+
+            if (interaction.commandName === 'warn') {
+
+                const isLeadership = interaction.member.roles.cache.some(role =>
+                    leadershipRoleIds.includes(role.id)
+                );
+
+                if (!isLeadership) {
+
+                    return interaction.reply({
+
+                        content: '❌ Nu ai permisiune.',
+
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+
+                const user = interaction.options.getUser('membru');
+                const motiv = interaction.options.getString('motiv');
+
+                if (!warns.has(user.id)) {
+
+                    warns.set(user.id, []);
+                }
+
+                const userWarns = warns.get(user.id);
+
+                userWarns.push({
+
+                    moderator: interaction.user.tag,
+                    motiv,
+                    data: new Date().toLocaleDateString()
+                });
+
+                const embed = new EmbedBuilder()
+
+                    .setTitle('⚠️ WARN NOU')
+
+                    .setColor('Orange')
+
+                    .addFields(
+
+                        {
+                            name: '👤 Membru',
+                            value: `<@${user.id}>`
+                        },
+
+                        {
+                            name: '📌 Motiv',
+                            value: motiv
+                        },
+
+                        {
+                            name: '🛡️ Acordat de',
+                            value: interaction.user.tag
+                        },
+
+                        {
+                            name: '🔢 Total Warn-uri',
+                            value: `${userWarns.length}`
+                        }
+                    )
+
+                    .setTimestamp();
+
+                const logChannel = await client.channels.fetch(logChannelId);
+
+                await logChannel.send({
+
+                    embeds: [embed]
+                });
+
+                return interaction.reply({
+
+                    content: `⚠️ ${user.tag} a primit warn.`,
+
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+
+            // =====================================================
+            // /WARNS
+            // =====================================================
+
+            if (interaction.commandName === 'warns') {
+
+                const user = interaction.options.getUser('membru');
+
+                const userWarns = warns.get(user.id) || [];
+
+                if (userWarns.length === 0) {
+
+                    return interaction.reply({
+
+                        content: '✅ Acest membru nu are warn-uri.',
+
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+
+                const text = userWarns.map((warn, index) =>
+
+                    `${index + 1}. ${warn.motiv} • ${warn.moderator}`
+                ).join('\n');
+
+                const embed = new EmbedBuilder()
+
+                    .setTitle(`⚠️ Warn-uri ${user.tag}`)
+
+                    .setColor('Orange')
+
+                    .setDescription(text);
+
+                return interaction.reply({
+
+                    embeds: [embed],
+
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+
+            // =====================================================
+            // /CLEARWARNS
+            // =====================================================
+
+            if (interaction.commandName === 'clearwarns') {
+
+                const isLeadership = interaction.member.roles.cache.some(role =>
+                    leadershipRoleIds.includes(role.id)
+                );
+
+                if (!isLeadership) {
+
+                    return interaction.reply({
+
+                        content: '❌ Nu ai permisiune.',
+
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+
+                const user = interaction.options.getUser('membru');
+
+                warns.delete(user.id);
+
+                return interaction.reply({
+
+                    content: `✅ Warn-urile lui ${user.tag} au fost sterse.`,
+
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+
+            // =====================================================
+            // /AMENDA
+            // =====================================================
+
+            if (interaction.commandName === 'amenda') {
+
+                const isLeadership = interaction.member.roles.cache.some(role =>
+                    leadershipRoleIds.includes(role.id)
+                );
+
+                if (!isLeadership) {
+
+                    return interaction.reply({
+
+                        content: '❌ Nu ai permisiune.',
+
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+
+                const user = interaction.options.getUser('membru');
+
+                const suma = interaction.options.getInteger('suma');
+
+                const motiv = interaction.options.getString('motiv');
+
+                if (!amenzi.has(user.id)) {
+
+                    amenzi.set(user.id, []);
+                }
+
+                const userAmenzi = amenzi.get(user.id);
+
+                userAmenzi.push({
+
+                    suma,
+                    motiv,
+                    moderator: interaction.user.tag,
+                    data: new Date().toLocaleDateString()
+                });
+
+                const embed = new EmbedBuilder()
+
+                    .setTitle('💸 AMENDA NOUA')
+
+                    .setColor('Red')
+
+                    .addFields(
+
+                        {
+                            name: '👤 Membru',
+                            value: `<@${user.id}>`
+                        },
+
+                        {
+                            name: '💰 Suma',
+                            value: `${suma}$`
+                        },
+
+                        {
+                            name: '📌 Motiv',
+                            value: motiv
+                        },
+
+                        {
+                            name: '🛡️ Acordata de',
+                            value: interaction.user.tag
+                        }
+                    )
+
+                    .setTimestamp();
+
+                const logChannel = await client.channels.fetch(logChannelId);
+
+                await logChannel.send({
+
+                    embeds: [embed]
+                });
+
+                return interaction.reply({
+
+                    content: `💸 ${user.tag} a primit amenda.`,
+
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+
+            // =====================================================
+            // /AMENZI
+            // =====================================================
+
+            if (interaction.commandName === 'amenzi') {
+
+                const user = interaction.options.getUser('membru');
+
+                const userAmenzi = amenzi.get(user.id) || [];
+
+                if (userAmenzi.length === 0) {
+
+                    return interaction.reply({
+
+                        content: '✅ Acest membru nu are amenzi.',
+
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+
+                const total = userAmenzi.reduce((acc, item) =>
+                    acc + item.suma, 0
+                );
+
+                const text = userAmenzi.map((amenda, index) =>
+
+                    `${index + 1}. ${amenda.suma}$ • ${amenda.motiv}`
+                ).join('\n');
+
+                const embed = new EmbedBuilder()
+
+                    .setTitle(`💸 Amenzi ${user.tag}`)
+
+                    .setColor('Red')
+
+                    .setDescription(text)
+
+                    .addFields({
+
+                        name: '💰 Total',
+
+                        value: `${total}$`
+                    });
+
+                return interaction.reply({
+
+                    embeds: [embed],
+
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+
+            // =====================================================
+            // /PROFIL
+            // =====================================================
+
+            if (interaction.commandName === 'profil') {
+
+                const user = interaction.options.getUser('membru');
+
+                const userWarns = warns.get(user.id) || [];
+
+                const userAmenzi = amenzi.get(user.id) || [];
+
+                const totalAmenzi = userAmenzi.reduce((acc, item) =>
+                    acc + item.suma, 0
+                );
+
+                const embed = new EmbedBuilder()
+
+                    .setTitle(`👤 Profil ${user.tag}`)
+
+                    .setColor('Blue')
+
+                    .addFields(
+
+                        {
+                            name: '⚠️ Warn-uri',
+                            value: `${userWarns.length}`,
+                            inline: true
+                        },
+
+                        {
+                            name: '💸 Amenzi',
+                            value: `${totalAmenzi}$`,
+                            inline: true
+                        },
+
+                        {
+                            name: '📋 Task-uri',
+                            value: 'In curand',
+                            inline: true
+                        }
+                    )
+
+                    .setThumbnail(user.displayAvatarURL())
+
+                    .setTimestamp();
+
+                return interaction.reply({
+
+                    embeds: [embed],
+
+                    flags: MessageFlags.Ephemeral
+                });
+            }
         }
 
         // =====================================================
@@ -395,11 +865,13 @@ client.on(Events.InteractionCreate, async interaction => {
 
             if (interaction.customId.startsWith('task_done_')) {
 
-                const taskId = interaction.customId.split('_')[2];
+                const embed = interaction.message.embeds[0];
 
-                const task = tasks.get(taskId);
+                const membruField = embed.fields.find(
+                    field => field.name === '👤 Membru'
+                );
 
-                if (!task) {
+                if (!membruField) {
 
                     return interaction.reply({
 
@@ -409,7 +881,9 @@ client.on(Events.InteractionCreate, async interaction => {
                     });
                 }
 
-                const isOwner = interaction.user.id === task.userId;
+                const mentionedUserId = membruField.value.replace(/[<@!>]/g, '');
+
+                const isOwner = interaction.user.id === mentionedUserId;
 
                 const isLeadership = interaction.member.roles.cache.some(role =>
                     leadershipRoleIds.includes(role.id)
@@ -419,7 +893,7 @@ client.on(Events.InteractionCreate, async interaction => {
 
                     return interaction.reply({
 
-                        content: '❌ Nu poti folosi acest buton.',
+                        content: '❌ Nu ai permisiune sa folosesti acest buton.',
 
                         flags: MessageFlags.Ephemeral
                     });
@@ -459,10 +933,8 @@ client.on(Events.InteractionCreate, async interaction => {
                 );
 
                 await logsChannel.send(
-                    `📢 <@${task.userId}> este pregatit pentru predarea task-ului.`
+                    `📢 <@${mentionedUserId}> este pregatit pentru predarea task-ului.`
                 );
-
-                tasks.delete(taskId);
 
                 return;
             }
