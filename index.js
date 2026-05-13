@@ -15,7 +15,7 @@ const {
     EmbedBuilder,
     ButtonBuilder,
     ButtonStyle,
-    MessageFlags
+    MessageFlags,
     PermissionFlagsBits
 } = require('discord.js');
 
