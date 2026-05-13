@@ -1,4 +1,5 @@
 require('dotenv').config();
+
 const {
     Client,
     GatewayIntentBits,
@@ -24,6 +25,8 @@ const {
     acceptedRoleIds
 } = require('./config.json');
 
+const token = process.env.DISCORD_TOKEN;
+
 const client = new Client({
 
     intents: [
@@ -40,6 +43,20 @@ const client = new Client({
 // ================= STORAGE =================
 
 const applications = new Map();
+const tasks = new Map();
+
+// ================= CONFIG TASK =================
+
+// CHANNEL unde se posteaza task-urile
+const taskChannelId = '1497367152397914302';
+
+// CHANNEL logs task
+const taskLogsChannelId = '1503906070010269721';
+
+// ROLE conducere
+const leadershipRoleIds = [
+    '1493768690133499926'
+];
 
 // ================= READY =================
 
@@ -49,11 +66,57 @@ client.once(Events.ClientReady, async () => {
 
     const commands = [
 
+        // ================= CV =================
+
         new SlashCommandBuilder()
 
             .setName('cv')
 
-            .setDescription('Completeaza CV-ul')
+            .setDescription('Completeaza CV-ul'),
+
+        // ================= TASK =================
+
+        new SlashCommandBuilder()
+
+            .setName('task')
+
+            .setDescription('Creaza un task')
+
+            .addUserOption(option =>
+
+                option.setName('membru')
+
+                    .setDescription('Membrul care primeste task')
+
+                    .setRequired(true)
+            )
+
+            .addStringOption(option =>
+
+                option.setName('cerinta')
+
+                    .setDescription('Cerinta task-ului')
+
+                    .setRequired(true)
+            )
+
+            .addStringOption(option =>
+
+                option.setName('data')
+
+                    .setDescription('Data deadline')
+
+                    .setRequired(true)
+            )
+
+            .addStringOption(option =>
+
+                option.setName('ora')
+
+                    .setDescription('Ora deadline')
+
+                    .setRequired(true)
+            )
 
     ].map(cmd => cmd.toJSON());
 
@@ -75,7 +138,7 @@ client.once(Events.ClientReady, async () => {
             }
         );
 
-        console.log('✅ Comanda /cv a fost inregistrata.');
+        console.log('✅ Slash commands înregistrate.');
 
     } catch (err) {
 
@@ -94,9 +157,13 @@ client.on(Events.InteractionCreate, async interaction => {
 
     try {
 
-        // ================= /CV =================
+        // =====================================================
+        // /CV
+        // =====================================================
 
         if (interaction.isChatInputCommand()) {
+
+            // ================= CV =================
 
             if (interaction.commandName === 'cv') {
 
@@ -181,9 +248,114 @@ client.on(Events.InteractionCreate, async interaction => {
 
                 return await interaction.showModal(modal);
             }
+
+            // =====================================================
+            // /TASK
+            // =====================================================
+
+            if (interaction.commandName === 'task') {
+
+                const isLeadership = interaction.member.roles.cache.some(role =>
+                    leadershipRoleIds.includes(role.id)
+                );
+
+                if (!isLeadership) {
+
+                    return interaction.reply({
+
+                        content: '❌ Nu ai permisiune.',
+
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+
+                const user = interaction.options.getUser('membru');
+
+                const cerinta = interaction.options.getString('cerinta');
+
+                const data = interaction.options.getString('data');
+
+                const ora = interaction.options.getString('ora');
+
+                const taskId = Date.now().toString();
+
+                tasks.set(taskId, {
+
+                    userId: user.id
+                });
+
+                const embed = new EmbedBuilder()
+
+                    .setTitle('📋 TASK NOU')
+
+                    .setColor('Yellow')
+
+                    .addFields(
+
+                        {
+                            name: '👤 Membru',
+                            value: `<@${user.id}>`
+                        },
+
+                        {
+                            name: '📦 Cerinta',
+                            value: cerinta
+                        },
+
+                        {
+                            name: '📅 Deadline',
+                            value: `${data} la ${ora}`
+                        },
+
+                        {
+                            name: '📌 Status',
+                            value: '🟡 In progres'
+                        }
+                    )
+
+                    .setFooter({
+
+                        text: `TASK ID: ${taskId}`
+                    })
+
+                    .setTimestamp();
+
+                const buttons = new ActionRowBuilder()
+
+                    .addComponents(
+
+                        new ButtonBuilder()
+
+                            .setCustomId(`task_done_${taskId}`)
+
+                            .setLabel('Task Finalizat')
+
+                            .setStyle(ButtonStyle.Success)
+                    );
+
+                const channel = await client.channels.fetch(taskChannelId);
+
+                await channel.send({
+
+                    content: `<@${user.id}>`,
+
+                    embeds: [embed],
+
+                    components: [buttons]
+                });
+
+                return interaction.reply({
+
+                    content: '✅ Task creat.',
+
+                    flags: MessageFlags.Ephemeral
+                });
+            }
         }
 
-        // ================= MODAL =================
+        // =====================================================
+        // MODAL CV
+        // =====================================================
 
         if (interaction.isModalSubmit()) {
 
@@ -211,71 +383,156 @@ client.on(Events.InteractionCreate, async interaction => {
             }
         }
 
-// ================= BUTTONS =================
+        // =====================================================
+        // BUTTONS
+        // =====================================================
 
-if (interaction.isButton()) {
+        if (interaction.isButton()) {
 
-    const embed = interaction.message.embeds[0];
+            // =====================================================
+            // TASK BUTTON
+            // =====================================================
 
-    const userId = embed.footer.text.replace(
-        'USER ID: ',
-        ''
-    );
+            if (interaction.customId.startsWith('task_done_')) {
 
-    const member = await interaction.guild.members.fetch(userId);
+                const taskId = interaction.customId.split('_')[2];
 
-    // ACCEPT
+                const task = tasks.get(taskId);
 
-    if (interaction.customId === 'accept_cv') {
+                if (!task) {
 
-        await member.roles.add(acceptedRoleIds);
+                    return interaction.reply({
 
-        await member.send(
-            '✅ Aplicatia ta a fost ACCEPTATA.'
-        ).catch(() => {});
+                        content: '❌ Task invalid.',
 
-        const logChannel = await client.channels.fetch(logChannelId);
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
 
-        await logChannel.send(
-            `📢 Supervizorul ${interaction.user.tag} a ACCEPTAT CV-ul lui <@${userId}> !`
-        );
+                const isOwner = interaction.user.id === task.userId;
 
-        return await interaction.reply({
+                const isLeadership = interaction.member.roles.cache.some(role =>
+                    leadershipRoleIds.includes(role.id)
+                );
 
-            content: '✅ CV acceptat.',
+                if (!isOwner && !isLeadership) {
 
-            flags: MessageFlags.Ephemeral
-        });
-    }
+                    return interaction.reply({
 
-    // DECLINE
+                        content: '❌ Nu poti folosi acest buton.',
 
-    if (interaction.customId === 'decline_cv') {
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
 
-        await member.send(
-            '❌ Aplicatia ta a fost RESPINSA.'
-        ).catch(() => {});
+                const updatedEmbed = EmbedBuilder.from(
+                    interaction.message.embeds[0]
+                )
 
-        const logChannel = await client.channels.fetch(logChannelId);
+                    .setColor('Green')
 
-        await logChannel.send(
-            `📢 Supervizorul ${interaction.user.tag} a RESPINS CV-ul lui <@${userId}> !`
-        );
+                    .spliceFields(3, 1, {
 
-        return await interaction.reply({
+                        name: '📌 Status',
 
-            content: '❌ CV respins.',
+                        value: '✅ FINALIZAT'
+                    });
 
-            flags: MessageFlags.Ephemeral
-        });
-    }
-}
+                const disabledButtons = new ActionRowBuilder()
+
+                    .addComponents(
+
+                        ButtonBuilder.from(interaction.component)
+
+                            .setDisabled(true)
+                    );
+
+                await interaction.update({
+
+                    embeds: [updatedEmbed],
+
+                    components: [disabledButtons]
+                });
+
+                const logsChannel = await client.channels.fetch(
+                    taskLogsChannelId
+                );
+
+                await logsChannel.send(
+                    `📢 <@${task.userId}> este pregatit pentru predarea task-ului.`
+                );
+
+                tasks.delete(taskId);
+
+                return;
+            }
+
+            // =====================================================
+            // CV BUTTONS
+            // =====================================================
+
+            const embed = interaction.message.embeds[0];
+
+            const userId = embed.footer.text.replace(
+                'USER ID: ',
+                ''
+            );
+
+            const member = await interaction.guild.members.fetch(userId);
+
+            // ACCEPT
+
+            if (interaction.customId === 'accept_cv') {
+
+                await member.roles.add(acceptedRoleIds);
+
+                await member.send(
+                    '✅ Aplicatia ta a fost ACCEPTATA.'
+                ).catch(() => {});
+
+                const logChannel = await client.channels.fetch(logChannelId);
+
+                await logChannel.send(
+                    `📢 Supervizorul ${interaction.user.tag} a ACCEPTAT CV-ul lui <@${userId}> !`
+                );
+
+                return await interaction.reply({
+
+                    content: '✅ CV acceptat.',
+
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+
+            // DECLINE
+
+            if (interaction.customId === 'decline_cv') {
+
+                await member.send(
+                    '❌ Aplicatia ta a fost RESPINSA.'
+                ).catch(() => {});
+
+                const logChannel = await client.channels.fetch(logChannelId);
+
+                await logChannel.send(
+                    `📢 Supervizorul ${interaction.user.tag} a RESPINS CV-ul lui <@${userId}> !`
+                );
+
+                return await interaction.reply({
+
+                    content: '❌ CV respins.',
+
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+        }
 
     } catch (err) {
 
         console.error(err);
     }
-}); // 🔴 FIX: aici era eroarea (închidere corectă a InteractionCreate)
+
+});
 
 // ================= MESSAGE CREATE =================
 
@@ -379,4 +636,4 @@ client.on(Events.MessageCreate, async message => {
 
 // ================= LOGIN =================
 
-client.login(process.env.DISCORD_TOKEN);
+client.login(token);
