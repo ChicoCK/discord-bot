@@ -49,43 +49,31 @@ client.once(Events.ClientReady, async () => {
 
     console.log(`🤖 Bot pornit ca ${client.user.tag}`);
 
-const commands = [
+    const commands = [
 
-    new SlashCommandBuilder()
+        new SlashCommandBuilder()
+            .setName('cv')
+            .setDescription('Completeaza CV-ul'),
 
-        .setName('cv')
+        new SlashCommandBuilder()
+            .setName('task')
+            .setDescription('Adauga un task')
+            .addUserOption(option =>
+                option
+                    .setName('membru')
+                    .setDescription('Alege membrul')
+                    .setRequired(true)
+            )
+            .addStringOption(option =>
+                option
+                    .setName('cerinta')
+                    .setDescription('Task-ul membrului')
+                    .setRequired(true)
+            )
 
-        .setDescription('Completeaza CV-ul'),
+    ].map(cmd => cmd.toJSON());
 
-    new SlashCommandBuilder()
-
-        .setName('task')
-
-        .setDescription('Adauga un task')
-
-        .addUserOption(option =>
-
-            option
-
-                .setName('membru')
-
-                .setDescription('Alege membrul')
-
-                .setRequired(true)
-        )
-
-        .addStringOption(option =>
-
-            option
-
-                .setName('cerinta')
-
-                .setDescription('Task-ul membrului')
-
-                .setRequired(true)
-        )
-
-].map(cmd => cmd.toJSON());
+}); // 🔴 ASTA LIPSEȘTE LA TINE
     
 // ================= ERRORS =================
 
