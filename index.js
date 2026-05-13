@@ -1,4 +1,5 @@
 require('dotenv').config();
+const token = process.env.DISCORD_TOKEN;
 const {
     Client,
     GatewayIntentBits,
@@ -15,6 +16,7 @@ const {
     ButtonBuilder,
     ButtonStyle,
     MessageFlags
+    PermissionFlagsBits
 } = require('discord.js');
 
 const {
@@ -47,42 +49,44 @@ client.once(Events.ClientReady, async () => {
 
     console.log(`🤖 Bot pornit ca ${client.user.tag}`);
 
-    const commands = [
+const commands = [
 
-        new SlashCommandBuilder()
+    new SlashCommandBuilder()
 
-            .setName('cv')
+        .setName('cv')
 
-            .setDescription('Completeaza CV-ul')
+        .setDescription('Completeaza CV-ul'),
 
-    ].map(cmd => cmd.toJSON());
+    new SlashCommandBuilder()
 
-    const rest = new REST({
-        version: '10'
-    }).setToken(token);
+        .setName('task')
 
-    try {
+        .setDescription('Adauga un task')
 
-        await rest.put(
+        .addUserOption(option =>
 
-            Routes.applicationGuildCommands(
-                clientId,
-                guildId
-            ),
+            option
 
-            {
-                body: commands
-            }
-        );
+                .setName('membru')
 
-        console.log('✅ Comanda /cv a fost inregistrata.');
+                .setDescription('Alege membrul')
 
-    } catch (err) {
+                .setRequired(true)
+        )
 
-        console.error(err);
-    }
-});
+        .addStringOption(option =>
 
+            option
+
+                .setName('cerinta')
+
+                .setDescription('Task-ul membrului')
+
+                .setRequired(true)
+        )
+
+].map(cmd => cmd.toJSON());
+    
 // ================= ERRORS =================
 
 process.on('unhandledRejection', console.error);
@@ -183,6 +187,100 @@ client.on(Events.InteractionCreate, async interaction => {
             }
         }
 
+// ================= /TASK =================
+
+if (interaction.isChatInputCommand()) {
+
+    if (interaction.commandName === 'task') {
+
+        if (!interaction.member.permissions.has(
+            PermissionFlagsBits.Administrator
+        )) {
+
+            return interaction.reply({
+
+                content: '❌ Nu ai permisiune.',
+
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
+        const membru =
+            interaction.options.getUser('membru');
+
+        const cerinta =
+            interaction.options.getString('cerinta');
+
+        // CANAL TASK
+
+        const taskChannel =
+            await client.channels.fetch(
+                '1497367152397914302'
+            );
+
+        const embed = new EmbedBuilder()
+
+            .setTitle('📋 TASK NOU')
+
+            .setColor('Yellow')
+
+            .addFields(
+
+                {
+                    name: '👤 Membru',
+                    value: `<@${membru.id}>`
+                },
+
+                {
+                    name: '📦 Cerinta',
+                    value: cerinta
+                },
+
+                {
+                    name: '📌 Status',
+                    value: '🟡 In progres'
+                }
+            )
+
+            .setFooter({
+
+                text: `TASK USER ID: ${membru.id}`
+            })
+
+            .setTimestamp();
+
+        const button =
+            new ActionRowBuilder()
+
+                .addComponents(
+
+                    new ButtonBuilder()
+
+                        .setCustomId('task_done')
+
+                        .setLabel('✅ Task Finalizat')
+
+                        .setStyle(ButtonStyle.Success)
+                );
+
+        await taskChannel.send({
+
+            content: `<@${membru.id}>`,
+
+            embeds: [embed],
+
+            components: [button]
+        });
+
+        return interaction.reply({
+
+            content: '✅ Task trimis.',
+
+            flags: MessageFlags.Ephemeral
+        });
+    }
+}
+        
         // ================= MODAL =================
 
         if (interaction.isModalSubmit()) {
@@ -268,6 +366,87 @@ if (interaction.isButton()) {
 
             flags: MessageFlags.Ephemeral
         });
+
+        // ================= TASK DONE =================
+
+if (interaction.customId === 'task_done') {
+
+    const embed =
+        interaction.message.embeds[0];
+
+    const userId =
+        embed.footer.text.replace(
+            'TASK USER ID: ',
+            ''
+        );
+
+    if (interaction.user.id !== userId) {
+
+        return interaction.reply({
+
+            content:
+                '❌ Acest task nu este al tau.',
+
+            flags: MessageFlags.Ephemeral
+        });
+    }
+
+    const logChannel =
+        await client.channels.fetch(
+            '1503906070010269721'
+        );
+
+    const updatedEmbed =
+        EmbedBuilder.from(embed)
+
+            .setColor('Green')
+
+            .spliceFields(2, 1, {
+
+                name: '📌 Status',
+
+                value: '✅ FINALIZAT'
+            });
+
+    const disabledButton =
+        new ActionRowBuilder()
+
+            .addComponents(
+
+                ButtonBuilder.from(
+
+                    interaction.message
+                        .components[0]
+                        .components[0]
+
+                ).setDisabled(true)
+            );
+
+    await logChannel.send({
+
+        content:
+            '<@&1493768690133499926> ' +
+            `Task finalizat de <@${userId}>.`,
+
+        embeds: [updatedEmbed]
+    });
+
+    await interaction.update({
+
+        embeds: [updatedEmbed],
+
+        components: [disabledButton]
+    });
+
+    await interaction.followUp({
+
+        content:
+            '✅ Task-ul tau a fost trimis catre conducere.\n' +
+            'Un membru din conducere te va contacta pentru predare.',
+
+        flags: MessageFlags.Ephemeral
+    });
+}
     }
 }
 
@@ -376,241 +555,5 @@ client.on(Events.MessageCreate, async message => {
         console.error(err);
     }
 });
-
-// ================= REGISTER COMMAND =================
-
-const commands = [
-
-    new SlashCommandBuilder()
-
-        .setName('task')
-
-        .setDescription('Adauga un task')
-
-        .addUserOption(option =>
-
-            option
-
-                .setName('membru')
-
-                .setDescription('Alege membrul')
-
-                .setRequired(true)
-        )
-
-        .addStringOption(option =>
-
-            option
-
-                .setName('cerinta')
-
-                .setDescription('Task-ul membrului')
-
-                .setRequired(true)
-        )
-
-].map(cmd => cmd.toJSON());
-
-// ================= /TASK =================
-
-if (interaction.isChatInputCommand()) {
-
-    if (interaction.commandName === 'task') {
-
-        // doar admini
-
-        if (!interaction.member.permissions.has(
-            PermissionFlagsBits.Administrator
-        )) {
-
-            return interaction.reply({
-
-                content: '❌ Nu ai permisiune.',
-
-                ephemeral: true
-            });
-        }
-
-        const membru =
-            interaction.options.getUser('membru');
-
-        const cerinta =
-            interaction.options.getString('cerinta');
-
-        // canal evidenta
-
-        const taskChannel =
-            await client.channels.fetch(
-                '1497367152397914302, 1494860985066848357'
-            );
-
-        // ================= EMBED =================
-
-        const embed = new EmbedBuilder()
-
-            .setTitle('📋 TASK NOU')
-
-            .setColor('Yellow')
-
-            .addFields(
-
-                {
-                    name: '👤 Membru',
-                    value: `<@${membru.id}>`
-                },
-
-                {
-                    name: '📦 Cerinta',
-                    value: cerinta
-                },
-
-                {
-                    name: '📌 Status',
-                    value: '🟡 In progres'
-                }
-            )
-
-            .setFooter({
-
-                text: `TASK USER ID: ${membru.id}`
-            })
-
-            .setTimestamp();
-
-        // ================= BUTTON =================
-
-        const button =
-            new ActionRowBuilder()
-
-                .addComponents(
-
-                    new ButtonBuilder()
-
-                        .setCustomId('task_done')
-
-                        .setLabel('✅ Task Finalizat')
-
-                        .setStyle(ButtonStyle.Success)
-                );
-
-        // ================= SEND =================
-
-        await taskChannel.send({
-
-            content: `<@${membru.id}>`,
-
-            embeds: [embed],
-
-            components: [button]
-        });
-
-        return interaction.reply({
-
-            content: '✅ Task trimis.',
-
-            ephemeral: true
-        });
-    }
-}
-
-// ================= BUTTON =================
-
-if (interaction.isButton()) {
-
-    if (interaction.customId === 'task_done') {
-
-        const embed =
-            interaction.message.embeds[0];
-
-        const userId =
-            embed.footer.text.replace(
-                'TASK USER ID: ',
-                ''
-            );
-
-        // doar persoana taskului
-
-        if (interaction.user.id !== userId) {
-
-            return interaction.reply({
-
-                content:
-                    '❌ Acest task nu este al tau.',
-
-                ephemeral: true
-            });
-        }
-
-        // canal logs
-
-        const logChannel =
-            await client.channels.fetch(
-                '1503906070010269721'
-            );
-
-        // ================= UPDATED EMBED =================
-
-        const updatedEmbed =
-            EmbedBuilder.from(embed)
-
-                .setColor('Green')
-
-                .spliceFields(2, 1, {
-
-                    name: '📌 Status',
-
-                    value: '✅ FINALIZAT'
-                });
-
-        // ================= DISABLE BUTTON =================
-
-        const disabledButton =
-            new ActionRowBuilder()
-
-                .addComponents(
-
-                    ButtonBuilder.from(
-
-                        interaction.message
-                            .components[0]
-                            .components[0]
-
-                    ).setDisabled(true)
-                );
-
-        // ================= SEND LOG =================
-
-        await logChannel.send({
-
-            content:
-                '<@&1493768690133499926> ' +
-                `Task finalizat de <@${userId}>.`,
-
-            embeds: [updatedEmbed]
-        });
-
-        // ================= UPDATE MESSAGE =================
-
-        await interaction.update({
-
-            embeds: [updatedEmbed],
-
-            components: [disabledButton]
-        });
-
-        // ================= PRIVATE MESSAGE =================
-
-        await interaction.followUp({
-
-            content:
-                '✅ Task-ul tau a fost trimis catre conducere.\n' +
-                'Un membru din conducere te va contacta pentru predare.',
-
-            ephemeral: true
-        });
-    }
-}
-
-// ================= LOGIN =================
 
 client.login(process.env.DISCORD_TOKEN);
