@@ -1,5 +1,4 @@
 require('dotenv').config();
-const token = process.env.DISCORD_TOKEN;
 const {
     Client,
     GatewayIntentBits,
@@ -26,488 +25,223 @@ const {
     acceptedRoleIds
 } = require('./config.json');
 
-const client = new Client({
+const token = process.env.DISCORD_TOKEN;
 
+const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent
     ],
-
-    partials: [
-        Partials.Channel
-    ]
+    partials: [Partials.Channel]
 });
 
 // ================= STORAGE =================
-
 const applications = new Map();
+const tasks = new Map(); // 🔥 TASK STORAGE
 
 // ================= READY =================
-
 client.once(Events.ClientReady, async () => {
+
     console.log(`🤖 Bot pornit ca ${client.user.tag}`);
 
     const commands = [
-
         new SlashCommandBuilder()
             .setName('cv')
             .setDescription('Completeaza CV-ul'),
 
         new SlashCommandBuilder()
             .setName('task')
-            .setDescription('Adauga un task')
+            .setDescription('Creaza un task')
             .addUserOption(option =>
-                option
-                    .setName('membru')
-                    .setDescription('Alege membrul')
+                option.setName('membru')
+                    .setDescription('Membrul')
                     .setRequired(true)
             )
             .addStringOption(option =>
-                option
-                    .setName('cerinta')
-                    .setDescription('Task-ul membrului')
+                option.setName('cerinta')
+                    .setDescription('Ex: 500k murdar')
                     .setRequired(true)
             )
-
     ].map(cmd => cmd.toJSON());
 
-    // 🔥 AICI ÎNREGISTREZI COMENZILE
     const rest = new REST({ version: '10' }).setToken(token);
 
     try {
-        console.log('⏳ Înregistrare slash commands...');
-
         await rest.put(
             Routes.applicationGuildCommands(clientId, guildId),
             { body: commands }
         );
 
-        console.log('✅ Slash commands înregistrate!');
-    } catch (error) {
-        console.error(error);
+        console.log('✅ Slash commands înregistrate');
+    } catch (err) {
+        console.error(err);
     }
 });
-    
-// ================= ERRORS =================
-
-process.on('unhandledRejection', console.error);
-process.on('uncaughtException', console.error);
 
 // ================= INTERACTIONS =================
-
 client.on(Events.InteractionCreate, async interaction => {
 
     try {
 
         // ================= /CV =================
+        if (interaction.isChatInputCommand() && interaction.commandName === 'cv') {
 
-        if (interaction.isChatInputCommand()) {
-
-            if (interaction.commandName === 'cv') {
-
-                if (applications.has(interaction.user.id)) {
-
-                    return interaction.reply({
-
-                        content: '❌ Ai deja un CV in curs.',
-
-                        flags: MessageFlags.Ephemeral
-                    });
-                }
-
-                const modal = new ModalBuilder()
-
-                    .setCustomId('cv_modal')
-
-                    .setTitle('Aplicatie CV');
-
-                const nume = new TextInputBuilder()
-
-                    .setCustomId('nume')
-
-                    .setLabel('Nume Prenume')
-
-                    .setStyle(TextInputStyle.Short)
-
-                    .setRequired(true);
-
-                const cnp = new TextInputBuilder()
-
-                    .setCustomId('cnp')
-
-                    .setLabel('CNP')
-
-                    .setStyle(TextInputStyle.Short)
-
-                    .setRequired(true);
-
-                const luni = new TextInputBuilder()
-
-                    .setCustomId('luni')
-
-                    .setLabel('Cate luni ai pe oras?')
-
-                    .setStyle(TextInputStyle.Short)
-
-                    .setRequired(true);
-
-                const angajator = new TextInputBuilder()
-
-                    .setCustomId('angajator')
-
-                    .setLabel('Cine te-a angajat?')
-
-                    .setStyle(TextInputStyle.Short)
-
-                    .setRequired(true);
-
-                const telefon = new TextInputBuilder()
-
-                    .setCustomId('telefon')
-
-                    .setLabel('Numar de telefon')
-
-                    .setStyle(TextInputStyle.Short)
-
-                    .setRequired(true);
-
-                modal.addComponents(
-
-                    new ActionRowBuilder().addComponents(nume),
-
-                    new ActionRowBuilder().addComponents(cnp),
-
-                    new ActionRowBuilder().addComponents(luni),
-
-                    new ActionRowBuilder().addComponents(angajator),
-
-                    new ActionRowBuilder().addComponents(telefon)
-                );
-
-                return await interaction.showModal(modal);
+            if (applications.has(interaction.user.id)) {
+                return interaction.reply({
+                    content: '❌ Ai deja un CV in curs.',
+                    flags: MessageFlags.Ephemeral
+                });
             }
+
+            const modal = new ModalBuilder()
+                .setCustomId('cv_modal')
+                .setTitle('Aplicatie CV');
+
+            const fields = [
+                ['nume', 'Nume Prenume'],
+                ['cnp', 'CNP'],
+                ['luni', 'Cate luni ai pe oras?'],
+                ['angajator', 'Cine te-a angajat?'],
+                ['telefon', 'Telefon']
+            ].map(([id, label]) =>
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId(id)
+                        .setLabel(label)
+                        .setStyle(TextInputStyle.Short)
+                        .setRequired(true)
+                )
+            );
+
+            modal.addComponents(...fields);
+
+            return interaction.showModal(modal);
         }
 
-// ================= /TASK =================
+        // ================= /TASK =================
+        if (interaction.isChatInputCommand() && interaction.commandName === 'task') {
 
-if (interaction.isChatInputCommand()) {
+            if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+                return interaction.reply({
+                    content: '❌ Nu ai permisiune.',
+                    flags: MessageFlags.Ephemeral
+                });
+            }
 
-    if (interaction.commandName === 'task') {
+            const user = interaction.options.getUser('membru');
+            const cerinta = interaction.options.getString('cerinta');
 
-        if (!interaction.member.permissions.has(
-            PermissionFlagsBits.Administrator
-        )) {
+            const taskId = Date.now().toString();
+
+            const embed = new EmbedBuilder()
+                .setTitle('📋 TASK NOU')
+                .setColor('Yellow')
+                .addFields(
+                    { name: '👤 Membru', value: `<@${user.id}>` },
+                    { name: '📦 Cerinta', value: cerinta },
+                    { name: '📌 Status', value: '🟡 In progres' }
+                )
+                .setFooter({ text: `TASK:${taskId} | USER:${user.id}` })
+                .setTimestamp();
+
+            const button = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`task_done_${taskId}`)
+                    .setLabel('Task Finalizat')
+                    .setStyle(ButtonStyle.Success)
+            );
+
+            tasks.set(taskId, {
+                userId: user.id,
+                cerinta
+            });
+
+            const channel = await client.channels.fetch('1497367152397914302');
+
+            await channel.send({
+                content: `<@${user.id}>`,
+                embeds: [embed],
+                components: [button]
+            });
 
             return interaction.reply({
-
-                content: '❌ Nu ai permisiune.',
-
+                content: '✅ Task creat.',
                 flags: MessageFlags.Ephemeral
             });
         }
 
-        const membru =
-            interaction.options.getUser('membru');
+        // ================= BUTTON TASK =================
+        if (interaction.isButton() && interaction.customId.startsWith('task_done_')) {
 
-        const cerinta =
-            interaction.options.getString('cerinta');
+            const taskId = interaction.customId.split('_')[2];
+            const task = tasks.get(taskId);
 
-        // CANAL TASK
-
-        const taskChannel =
-            await client.channels.fetch(
-                '1497367152397914302'
-            );
-
-        const embed = new EmbedBuilder()
-
-            .setTitle('📋 TASK NOU')
-
-            .setColor('Yellow')
-
-            .addFields(
-
-                {
-                    name: '👤 Membru',
-                    value: `<@${membru.id}>`
-                },
-
-                {
-                    name: '📦 Cerinta',
-                    value: cerinta
-                },
-
-                {
-                    name: '📌 Status',
-                    value: '🟡 In progres'
-                }
-            )
-
-            .setFooter({
-
-                text: `TASK USER ID: ${membru.id}`
-            })
-
-            .setTimestamp();
-
-        const button =
-            new ActionRowBuilder()
-
-                .addComponents(
-
-                    new ButtonBuilder()
-
-                        .setCustomId('task_done')
-
-                        .setLabel('✅ Task Finalizat')
-
-                        .setStyle(ButtonStyle.Success)
-                );
-
-        await taskChannel.send({
-
-            content: `<@${membru.id}>`,
-
-            embeds: [embed],
-
-            components: [button]
-        });
-
-        return interaction.reply({
-
-            content: '✅ Task trimis.',
-
-            flags: MessageFlags.Ephemeral
-        });
-    }
-}
-        
-        // ================= MODAL =================
-
-        if (interaction.isModalSubmit()) {
-
-            if (interaction.customId === 'cv_modal') {
-
-                applications.set(interaction.user.id, {
-
-                    nume: interaction.fields.getTextInputValue('nume'),
-
-                    cnp: interaction.fields.getTextInputValue('cnp'),
-
-                    luni: interaction.fields.getTextInputValue('luni'),
-
-                    angajator: interaction.fields.getTextInputValue('angajator'),
-
-                    telefon: interaction.fields.getTextInputValue('telefon')
-                });
-
-                return await interaction.reply({
-
-                    content: '📸 Acum trimite poza buletinului.',
-
+            if (!task) {
+                return interaction.reply({
+                    content: '❌ Task invalid.',
                     flags: MessageFlags.Ephemeral
                 });
             }
-        }
 
-// ================= BUTTONS =================
+            if (interaction.user.id !== task.userId) {
+                return interaction.reply({
+                    content: '❌ Nu este task-ul tau.',
+                    flags: MessageFlags.Ephemeral
+                });
+            }
 
-if (interaction.isButton()) {
+            const logChannel = await client.channels.fetch('1503906070010269721');
 
-    const embed = interaction.message.embeds[0];
+            const updated = EmbedBuilder.from(interaction.message.embeds[0])
+                .setColor('Green')
+                .spliceFields(2, 1, {
+                    name: '📌 Status',
+                    value: '✅ FINALIZAT'
+                });
 
-    const userId = embed.footer.text.replace(
-        'USER ID: ',
-        ''
-    );
-
-    const member = await interaction.guild.members.fetch(userId);
-
-    // ACCEPT
-
-    if (interaction.customId === 'accept_cv') {
-
-        await member.roles.add(acceptedRoleIds);
-
-        await member.send(
-            '✅ Aplicatia ta a fost ACCEPTATA.'
-        ).catch(() => {});
-
-        const logChannel = await client.channels.fetch(logChannelId);
-
-        await logChannel.send(
-            `📢 Supervizorul ${interaction.user.tag} a ACCEPTAT CV-ul lui <@${userId}> !`
-        );
-
-        return await interaction.reply({
-
-            content: '✅ CV acceptat.',
-
-            flags: MessageFlags.Ephemeral
-        });
-    }
-
-// DECLINE
-if (interaction.customId === 'decline_cv') {
-
-    await member.send('❌ Aplicatia ta a fost RESPINSA.').catch(() => {});
-
-    const logChannel = await client.channels.fetch(logChannelId);
-
-    await logChannel.send(
-        `📢 Supervizorul ${interaction.user.tag} a RESPINS CV-ul lui <@${userId}> !`
-    );
-
-    return await interaction.reply({
-        content: '❌ CV respins.',
-        flags: MessageFlags.Ephemeral
-    });
-}
-
-// ================= TASK DONE =================
-if (interaction.customId === 'task_done') {
-
-    const embed = interaction.message.embeds[0];
-
-    const userId = embed.footer.text.replace('TASK USER ID: ', '');
-
-    if (interaction.user.id !== userId) {
-        return interaction.reply({
-            content: '❌ Acest task nu este al tau.',
-            flags: MessageFlags.Ephemeral
-        });
-    }
-
-    const logChannel = await client.channels.fetch('1503906070010269721');
-
-    const updatedEmbed = EmbedBuilder.from(embed)
-        .setColor('Green')
-        .spliceFields(2, 1, {
-            name: '📌 Status',
-            value: '✅ FINALIZAT'
-        });
-
-    const disabledButton = new ActionRowBuilder().addComponents(
-        ButtonBuilder.from(
-            interaction.message.components[0].components[0]
-        ).setDisabled(true)
-    );
-
-    await logChannel.send({
-        content: `<@&1493768690133499926> Task finalizat de <@${userId}>.`,
-        embeds: [updatedEmbed]
-    });
-
-    await interaction.update({
-        embeds: [updatedEmbed],
-        components: [disabledButton]
-    });
-
-    return interaction.followUp({
-        content: '✅ Task-ul tau a fost trimis catre conducere.',
-        flags: MessageFlags.Ephemeral
-    });
-}
-
-// ================= MESSAGE CREATE =================
-
-client.on(Events.MessageCreate, async message => {
-
-    try {
-
-        if (message.author.bot) return;
-
-        if (!applications.has(message.author.id)) return;
-
-        if (message.attachments.size === 0) {
-
-            return;
-        }
-
-        const data = applications.get(message.author.id);
-
-        applications.delete(message.author.id);
-
-        const attachment = message.attachments.first();
-
-        const logChannel = await client.channels.fetch(
-            logChannelId
-        );
-
-        const embed = new EmbedBuilder()
-
-            .setTitle('📋 CV NOU')
-
-            .setColor('Red')
-
-            .addFields(
-
-                { name: '👤 Nume', value: data.nume },
-
-                { name: '🆔 CNP / ID', value: data.cnp },
-
-                { name: '📅 Luni', value: data.luni },
-
-                { name: '👨‍💼 Angajator', value: data.angajator },
-
-                { name: '📱 Telefon', value: data.telefon }
-            )
-
-            .setImage('attachment://buletin.png')
-
-            .setFooter({
-
-                text: `USER ID: ${message.author.id}`
-            });
-
-        const buttons = new ActionRowBuilder()
-
-            .addComponents(
-
-                new ButtonBuilder()
-
-                    .setCustomId('accept_cv')
-
-                    .setLabel('ACCEPT')
-
-                    .setStyle(ButtonStyle.Success),
-
-                new ButtonBuilder()
-
-                    .setCustomId('decline_cv')
-
-                    .setLabel('DECLINE')
-
-                    .setStyle(ButtonStyle.Danger)
+            const disabled = new ActionRowBuilder().addComponents(
+                ButtonBuilder.from(interaction.component).setDisabled(true)
             );
 
-        await logChannel.send({
+            await logChannel.send({
+                content: `<@&1493768690133499926> Task finalizat de <@${task.userId}>`
+            });
 
-            embeds: [embed],
+            await interaction.update({
+                embeds: [updated],
+                components: [disabled]
+            });
 
-            components: [buttons],
+            await interaction.followUp({
+                content: '✅ Task trimis spre conducere.',
+                flags: MessageFlags.Ephemeral
+            });
 
-            files: [
+            tasks.delete(taskId);
+        }
 
-                {
-                    attachment: attachment.url,
+        // ================= CV MODAL =================
+        if (interaction.isModalSubmit() && interaction.customId === 'cv_modal') {
 
-                    name: 'buletin.png'
-                }
-            ]
-        });
+            applications.set(interaction.user.id, {
+                nume: interaction.fields.getTextInputValue('nume'),
+                cnp: interaction.fields.getTextInputValue('cnp'),
+                luni: interaction.fields.getTextInputValue('luni'),
+                angajator: interaction.fields.getTextInputValue('angajator'),
+                telefon: interaction.fields.getTextInputValue('telefon')
+            });
 
-        await message.delete().catch(() => {});
-
-        await message.author.send(
-            '✅ CV-ul tau a fost trimis spre verificare.'
-        ).catch(() => {});
+            return interaction.reply({
+                content: '📸 Trimite poza buletinului.',
+                flags: MessageFlags.Ephemeral
+            });
+        }
 
     } catch (err) {
-
         console.error(err);
     }
 });
 
-client.login(process.env.DISCORD_TOKEN);
+// ================= LOGIN =================
+client.login(token);
