@@ -46,7 +46,6 @@ const applications = new Map();
 // ================= READY =================
 
 client.once(Events.ClientReady, async () => {
-
     console.log(`🤖 Bot pornit ca ${client.user.tag}`);
 
     const commands = [
@@ -73,7 +72,22 @@ client.once(Events.ClientReady, async () => {
 
     ].map(cmd => cmd.toJSON());
 
-}); // 🔴 ASTA LIPSEȘTE LA TINE
+    // 🔥 AICI ÎNREGISTREZI COMENZILE
+    const rest = new REST({ version: '10' }).setToken(token);
+
+    try {
+        console.log('⏳ Înregistrare slash commands...');
+
+        await rest.put(
+            Routes.applicationGuildCommands(clientId, guildId),
+            { body: commands }
+        );
+
+        console.log('✅ Slash commands înregistrate!');
+    } catch (error) {
+        console.error(error);
+    }
+});
     
 // ================= ERRORS =================
 
