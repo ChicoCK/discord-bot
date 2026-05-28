@@ -421,6 +421,71 @@ tasks.set(taskId, {
     deadline: deadline.getTime()
 });
 
+                // ================= DEADLINE SYSTEM =================
+
+const [zi, luna, an] = data.split('.');
+const [ore, minute] = ora.split(':');
+
+const deadlineDate = new Date(
+    an,
+    luna - 1,
+    zi,
+    ore,
+    minute
+);
+
+const timpRamas = deadlineDate.getTime() - Date.now();
+
+if (timpRamas > 0) {
+
+    setTimeout(async () => {
+
+        try {
+
+            const logsChannel = await client.channels.fetch(
+                taskLogsChannelId
+            );
+
+            await logsChannel.send({
+
+                embeds: [
+
+                    new EmbedBuilder()
+
+                        .setTitle('⏰ TASK EXPIRAT')
+
+                        .setColor('Red')
+
+                        .addFields(
+
+                            {
+                                name: '👤 Membru',
+                                value: `<@${user.id}>`
+                            },
+
+                            {
+                                name: '📦 Cerinta',
+                                value: cerinta
+                            },
+
+                            {
+                                name: '📅 Deadline',
+                                value: `${data} la ${ora}`
+                            }
+                        )
+
+                        .setTimestamp()
+                ]
+            });
+
+        } catch (err) {
+
+            console.error(err);
+        }
+
+    }, timpRamas);
+}
+
                 const embed = new EmbedBuilder()
 
                     .setTitle('📋 TASK NOU')
