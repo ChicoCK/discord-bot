@@ -413,10 +413,13 @@ client.on(Events.InteractionCreate, async interaction => {
 
                 const taskId = Date.now().toString();
 
-                tasks.set(taskId, {
+const deadline = new Date(`${data}T${ora}:00`);
 
-                    userId: user.id
-                });
+tasks.set(taskId, {
+
+    userId: user.id,
+    deadline: deadline.getTime()
+});
 
                 const embed = new EmbedBuilder()
 
@@ -478,6 +481,34 @@ client.on(Events.InteractionCreate, async interaction => {
                     components: [buttons]
                 });
 
+const timeLeft = deadline.getTime() - Date.now();
+
+if (timeLeft > 0) {
+
+    setTimeout(async () => {
+
+        try {
+
+            if (!tasks.has(taskId)) return;
+
+            const logsChannel = await client.channels.fetch(
+                taskLogsChannelId
+            );
+
+            await logsChannel.send(
+                `⏰ Task-ul lui <@${user.id}> a EXPIRAT!`
+            );
+
+            tasks.delete(taskId);
+
+        } catch (err) {
+
+            console.error(err);
+        }
+
+    }, timeLeft);
+}
+                
                 return interaction.reply({
 
                     content: '✅ Task creat.',
