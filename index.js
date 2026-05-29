@@ -796,16 +796,6 @@ client.on(Events.InteractionCreate, async interaction => {
 }
 
 // ================= TREMINDER =================
-
-// =====================================================
-// /TREMINDER
-// =====================================================
-
-if (interaction.commandName === 'treminder') {
-
-    const user = interaction.options.getUser('membru');
-    const task = interaction.options.getString('
-            
 new SlashCommandBuilder()
 
     .setName('treminder')
@@ -813,40 +803,106 @@ new SlashCommandBuilder()
     .setDescription('Creaza un reminder')
 
     .addUserOption(option =>
-
         option.setName('membru')
-
             .setDescription('Membrul')
-
             .setRequired(true)
     )
 
     .addStringOption(option =>
-
         option.setName('task')
-
             .setDescription('Task-ul')
-
             .setRequired(true)
     )
 
     .addStringOption(option =>
-
         option.setName('data')
-
             .setDescription('01.06.2026')
-
             .setRequired(true)
     )
 
     .addStringOption(option =>
-
         option.setName('ora')
-
             .setDescription('22:00')
-
             .setRequired(true)
     ),
+
+    if (interaction.commandName === 'treminder') {
+
+    const user = interaction.options.getUser('membru');
+    const task = interaction.options.getString('task');
+    const data = interaction.options.getString('data');
+    const ora = interaction.options.getString('ora');
+
+    const [d, m, y] = data.split('.');
+    const [h, min] = ora.split(':');
+
+    const deadline = new Date(y, m - 1, d, h, min);
+    const timeLeft = deadline.getTime() - Date.now();
+
+    if (timeLeft <= 0) {
+        return interaction.reply({
+            content: '❌ Data invalida',
+            flags: MessageFlags.Ephemeral
+        });
+    }
+
+    await interaction.reply({
+        content: '✅ Reminder creat',
+        flags: MessageFlags.Ephemeral
+    });
+
+    const roleId = 'ID_UL_TAU_AICI';
+
+    const oneHour = timeLeft - 3600000;
+
+    if (oneHour > 0) {
+
+        setTimeout(async () => {
+
+            try {
+                await user.send({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setTitle('⏰ Reminder 1 ora')
+                            .setColor('Orange')
+                            .addFields(
+                                { name: 'Task', value: task }
+                            )
+                    ]
+                });
+            } catch {}
+        }, oneHour);
+    }
+
+    setTimeout(async () => {
+
+        const logs = await client.channels.fetch(taskLogsChannelId);
+
+        await user.send({
+            embeds: [
+                new EmbedBuilder()
+                    .setTitle('⏰ EXPIRAT')
+                    .setColor('Red')
+                    .addFields(
+                        { name: 'Task', value: task }
+                    )
+            ]
+        }).catch(() => {});
+
+        await logs.send({
+            content: `<@&${roleId}> ⏰ Reminder expirat pentru <@${user.id}>`,
+            embeds: [
+                new EmbedBuilder()
+                    .setTitle('REMINDER EXPIRAT')
+                    .addFields(
+                        { name: 'User', value: `<@${user.id}>` },
+                        { name: 'Task', value: task }
+                    )
+            ]
+        });
+
+    }, timeLeft);
+}
             
             // =====================================================
             // /AMENZI
