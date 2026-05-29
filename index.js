@@ -794,6 +794,59 @@ client.on(Events.InteractionCreate, async interaction => {
         flags: MessageFlags.Ephemeral
     });
 }
+
+// ================= TREMINDER =================
+
+// =====================================================
+// /TREMINDER
+// =====================================================
+
+if (interaction.commandName === 'treminder') {
+
+    const user = interaction.options.getUser('membru');
+    const task = interaction.options.getString('
+            
+new SlashCommandBuilder()
+
+    .setName('treminder')
+
+    .setDescription('Creaza un reminder')
+
+    .addUserOption(option =>
+
+        option.setName('membru')
+
+            .setDescription('Membrul')
+
+            .setRequired(true)
+    )
+
+    .addStringOption(option =>
+
+        option.setName('task')
+
+            .setDescription('Task-ul')
+
+            .setRequired(true)
+    )
+
+    .addStringOption(option =>
+
+        option.setName('data')
+
+            .setDescription('01.06.2026')
+
+            .setRequired(true)
+    )
+
+    .addStringOption(option =>
+
+        option.setName('ora')
+
+            .setDescription('22:00')
+
+            .setRequired(true)
+    ),
             
             // =====================================================
             // /AMENZI
