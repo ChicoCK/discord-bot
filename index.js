@@ -387,7 +387,317 @@ client.on(Events.InteractionCreate, async interaction => {
             // /TASK
             // =====================================================
 
+new SlashCommandBuilder()
+
+    .setName('treminder')
+
+    .setDescription('Creaza un reminder')
+
+    .addUserOption(option =>
+
+        option.setName('membru')
+
+            .setDescription('Persoana')
+
+            .setRequired(true)
+    )
+
+    .addStringOption(option =>
+
+        option.setName('task')
+
+            .setDescription('Task-ul')
+
+            .setRequired(true)
+    )
+
+    .addStringOption(option =>
+
+        option.setName('data')
+
+            .setDescription('01.06.2026')
+
+            .setRequired(true)
+    )
+
+    .addStringOption(option =>
+
+        option.setName('ora')
+
+            .setDescription('22:00')
+
+            .setRequired(true)
+    ),
+            
             if (interaction.commandName === 'task') {
+
+    // =====================================================
+// /TREMINDER
+// =====================================================
+
+if (interaction.commandName === 'treminder') {
+
+    const user =
+        interaction.options.getUser('membru');
+
+    const task =
+        interaction.options.getString('task');
+
+    const data =
+        interaction.options.getString('data');
+
+    const ora =
+        interaction.options.getString('ora');
+
+    // =========================================
+    // DATE FORMAT
+    // =========================================
+
+    const [zi, luna, an] =
+        data.split('.');
+
+    const [ore, minute] =
+        ora.split(':');
+
+    const deadline = new Date(
+
+        an,
+        luna - 1,
+        zi,
+        ore,
+        minute
+    );
+
+    if (isNaN(deadline.getTime())) {
+
+        return interaction.reply({
+
+            content:
+                '❌ Format invalid.',
+
+            flags: MessageFlags.Ephemeral
+        });
+    }
+
+    const timpRamas =
+        deadline.getTime() - Date.now();
+
+    if (timpRamas <= 0) {
+
+        return interaction.reply({
+
+            content:
+                '❌ Deadline-ul trebuie sa fie in viitor.',
+
+            flags: MessageFlags.Ephemeral
+        });
+    }
+
+    // =========================================
+    // EMBED CREATE
+    // =========================================
+
+    const embed = new EmbedBuilder()
+
+        .setTitle('⏰ REMINDER CREAT')
+
+        .setColor('Blue')
+
+        .addFields(
+
+            {
+                name: '👤 Membru',
+                value: `<@${user.id}>`
+            },
+
+            {
+                name: '📦 Task',
+                value: task
+            },
+
+            {
+                name: '📅 Deadline',
+                value: `${data} ${ora}`
+            }
+        )
+
+        .setTimestamp();
+
+    const logsChannel =
+        await client.channels.fetch(
+            taskLogsChannelId
+        );
+
+    const reminderMessage =
+        await logsChannel.send({
+
+            content:
+                `📢 Reminder nou pentru <@${user.id}>`,
+
+            embeds: [embed]
+        });
+
+    // =========================================
+    // PIN MESSAGE
+    // =========================================
+
+    await reminderMessage.pin().catch(() => {});
+
+    // =========================================
+    // REMINDER 1 ORA INAINTE
+    // =========================================
+
+    const oneHourBefore =
+        timpRamas - 3600000;
+
+    if (oneHourBefore > 0) {
+
+        setTimeout(async () => {
+
+            try {
+
+                await user.send({
+
+                    embeds: [
+
+                        new EmbedBuilder()
+
+                            .setTitle('⏰ Reminder peste 1 ora')
+
+                            .setColor('Orange')
+
+                            .addFields(
+
+                                {
+                                    name: '📦 Task',
+                                    value: task
+                                },
+
+                                {
+                                    name: '📅 Deadline',
+                                    value:
+                                        `${data} ${ora}`
+                                }
+                            )
+
+                            .setTimestamp()
+                    ]
+                });
+
+            } catch (err) {
+
+                console.error(err);
+            }
+
+        }, oneHourBefore);
+    }
+
+    // =========================================
+    // DEADLINE FINAL
+    // =========================================
+
+    setTimeout(async () => {
+
+        try {
+
+            // DM USER
+
+            await user.send({
+
+                embeds: [
+
+                    new EmbedBuilder()
+
+                        .setTitle('⏰ REMINDER EXPIRAT')
+
+                        .setColor('Red')
+
+                        .addFields(
+
+                            {
+                                name: '📦 Task',
+                                value: task
+                            },
+
+                            {
+                                name: '📅 Deadline',
+                                value:
+                                    `${data} ${ora}`
+                            }
+                        )
+
+                        .setTimestamp()
+                ]
+            }).catch(() => {});
+
+            // LOGS CHANNEL
+
+            const logsChannel =
+                await client.channels.fetch(
+                    taskLogsChannelId
+                );
+
+            const expiredMessage =
+                await logsChannel.send({
+
+                    content:
+                        `<@&1493770022714212352> ⏰ Reminder expirat pentru <@${user.id}>`,
+
+                    embeds: [
+
+                        new EmbedBuilder()
+
+                            .setTitle('⏰ REMINDER EXPIRAT')
+
+                            .setColor('Red')
+
+                            .addFields(
+
+                                {
+                                    name: '👤 Membru',
+                                    value:
+                                        `<@${user.id}>`
+                                },
+
+                                {
+                                    name: '📦 Task',
+                                    value: task
+                                },
+
+                                {
+                                    name: '📅 Deadline',
+                                    value:
+                                        `${data} ${ora}`
+                                }
+                            )
+
+                            .setTimestamp()
+                    ]
+                });
+
+            // PIN FINAL MESSAGE
+
+            await expiredMessage.pin().catch(() => {});
+
+        } catch (err) {
+
+            console.error(err);
+        }
+
+    }, timpRamas);
+
+    // =========================================
+    // SUCCESS
+    // =========================================
+
+    return interaction.reply({
+
+        content:
+            '✅ Reminder creat cu succes.',
+
+        flags: MessageFlags.Ephemeral
+    });
+}
 
                 const isLeadership = interaction.member.roles.cache.some(role =>
                     leadershipRoleIds.includes(role.id)
