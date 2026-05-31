@@ -48,9 +48,6 @@ const tasks = new Map();
 const warns = new Map();
 const amenzi = new Map();
 
-const stash = new Map(); // item storage
-const stashLogs = new Map(); // history logs
-
 // ================= CONFIG TASK =================
 
 const taskChannelId = '1494860985066848357';
@@ -190,6 +187,125 @@ client.once(Events.ClientReady, async () => {
 
             .setRequired(true)
     ),
+
+// ================= STASH =================
+
+if (interaction.commandName === 'stash') {
+
+    const isLeadership = interaction.member.roles.cache.some(role =>
+        leadershipRoleIds.includes(role.id)
+    );
+
+    if (!isLeadership) {
+        return interaction.reply({
+            content: '❌ Nu ai permisiune.',
+            flags: MessageFlags.Ephemeral
+        });
+    }
+
+    const sub = interaction.options.getSubcommand();
+    const item = interaction.options.getString('item');
+    const cantitate = interaction.options.getInteger('cantitate');
+
+    if (!stash.has(item)) stash.set(item, 0);
+    if (!stashLogs.has(item)) stashLogs.set(item, []);
+
+    // ⚠️ FIX IMPORTANT: aici e OK await, pentru că suntem în async function
+    const logsChannel = await client.channels.fetch(logChannelId);
+
+    // ================= ADD =================
+    if (sub === 'add') {
+
+        const newVal = stash.get(item) + cantitate;
+        stash.set(item, newVal);
+
+        stashLogs.get(item).push({
+            action: 'ADD',
+            user: interaction.user.tag,
+            cantitate,
+            data: new Date().toLocaleString()
+        });
+
+        await logsChannel.send({
+            embeds: [
+                new EmbedBuilder()
+                    .setTitle('📦 STASH ADD')
+                    .setColor('Green')
+                    .addFields(
+                        { name: '👤 User', value: interaction.user.tag },
+                        { name: '📦 Item', value: item },
+                        { name: '➕ Cantitate', value: `${cantitate}` },
+                        { name: '📊 Stoc nou', value: `${newVal}` }
+                    )
+            ]
+        });
+
+        return interaction.reply({
+            content: `✅ Ai adaugat ${cantitate} ${item}`,
+            flags: MessageFlags.Ephemeral
+        });
+    }
+
+    // ================= REMOVE =================
+    if (sub === 'remove') {
+
+        const newVal = Math.max(0, stash.get(item) - cantitate);
+        stash.set(item, newVal);
+
+        stashLogs.get(item).push({
+            action: 'REMOVE',
+            user: interaction.user.tag,
+            cantitate,
+            data: new Date().toLocaleString()
+        });
+
+        await logsChannel.send({
+            embeds: [
+                new EmbedBuilder()
+                    .setTitle('📦 STASH REMOVE')
+                    .setColor('Red')
+                    .addFields(
+                        { name: '👤 User', value: interaction.user.tag },
+                        { name: '📦 Item', value: item },
+                        { name: '➖ Cantitate', value: `${cantitate}` },
+                        { name: '📊 Stoc nou', value: `${newVal}` }
+                    )
+            ]
+        });
+
+        return interaction.reply({
+            content: `❌ Ai scos ${cantitate} ${item}`,
+            flags: MessageFlags.Ephemeral
+        });
+    }
+
+    // ================= LOG =================
+    if (sub === 'log') {
+
+        let text = '';
+
+        stashLogs.forEach((logs, key) => {
+            text += `\n📦 ${key}\n`;
+
+            logs.slice(-5).forEach(l => {
+                text += `- ${l.action} | ${l.cantitate} | ${l.user} | ${l.data}\n`;
+            });
+        });
+
+        if (!text) text = 'Nu exista loguri.';
+
+        return interaction.reply({
+            embeds: [
+                new EmbedBuilder()
+                    .setTitle('📜 STASH LOGS')
+                    .setColor('Blue')
+                    .setDescription(text)
+            ],
+            flags: MessageFlags.Ephemeral
+        });
+    }
+}
+        
         // ================= AMENZI =================
 
         new SlashCommandBuilder()
@@ -297,45 +413,7 @@ client.on(Events.InteractionCreate, async interaction => {
     try {
 
         if (interaction.isChatInputCommand()) {
-            
-// ================= STASH =================
 
-new SlashCommandBuilder()
-    .setName('stash')
-    .setDescription('Sistem stash familie')
-    .addSubcommand(cmd =>
-        cmd.setName('add')
-            .setDescription('Adauga item in stash')
-            .addStringOption(opt =>
-                opt.setName('item')
-                    .setDescription('Numele itemului')
-                    .setRequired(true)
-            )
-            .addIntegerOption(opt =>
-                opt.setName('cantitate')
-                    .setDescription('Cantitatea')
-                    .setRequired(true)
-            )
-    )
-    .addSubcommand(cmd =>
-        cmd.setName('remove')
-            .setDescription('Scoate item din stash')
-            .addStringOption(opt =>
-                opt.setName('item')
-                    .setDescription('Numele itemului')
-                    .setRequired(true)
-            )
-            .addIntegerOption(opt =>
-                opt.setName('cantitate')
-                    .setDescription('Cantitatea')
-                    .setRequired(true)
-            )
-    )
-    .addSubcommand(cmd =>
-        cmd.setName('log')
-            .setDescription('Vezi log stash')
-    )
-            
             // =====================================================
             // /CV
             // =====================================================
@@ -1226,137 +1304,6 @@ client.on(Events.MessageCreate, async message => {
         console.error(err);
     }
 });
-
-// =====================================================
-// /STASH
-// =====================================================
-
-if (interaction.commandName === 'stash') {
-
-    const isLeadership = interaction.member.roles.cache.some(role =>
-        leadershipRoleIds.includes(role.id)
-    );
-
-    if (!isLeadership) {
-        return interaction.reply({
-            content: '❌ Nu ai permisiune.',
-            flags: MessageFlags.Ephemeral
-        });
-    }
-
-    const sub = interaction.options.getSubcommand();
-    const item = interaction.options.getString('item');
-    const cantitate = interaction.options.getInteger('cantitate');
-
-    if (!stash.has(item)) {
-        stash.set(item, 0);
-    }
-
-    if (!stashLogs.has(item)) {
-        stashLogs.set(item, []);
-    }
-
-    const logsChannel = await client.channels.fetch(logChannelId);
-
-    // ================= ADD =================
-    if (sub === 'add') {
-
-        const old = stash.get(item);
-        const newVal = old + cantitate;
-
-        stash.set(item, newVal);
-
-        stashLogs.get(item).push({
-            action: 'ADD',
-            user: interaction.user.tag,
-            cantitate,
-            data: new Date().toLocaleString()
-        });
-
-        const embed = new EmbedBuilder()
-            .setTitle('📦 STASH ADD')
-            .setColor('Green')
-            .addFields(
-                { name: '👤 User', value: interaction.user.tag },
-                { name: '📦 Item', value: item },
-                { name: '➕ Cantitate', value: `${cantitate}` },
-                { name: '📊 Stoc nou', value: `${newVal}` }
-            )
-            .setTimestamp();
-
-        await logsChannel.send({ embeds: [embed] });
-
-        return interaction.reply({
-            content: `✅ Ai adaugat ${cantitate} ${item}`,
-            flags: MessageFlags.Ephemeral
-        });
-    }
-
-    // ================= REMOVE =================
-    if (sub === 'remove') {
-
-        const old = stash.get(item);
-        const newVal = old - cantitate;
-
-        stash.set(item, newVal < 0 ? 0 : newVal);
-
-        stashLogs.get(item).push({
-            action: 'REMOVE',
-            user: interaction.user.tag,
-            cantitate,
-            data: new Date().toLocaleString()
-        });
-
-        const embed = new EmbedBuilder()
-            .setTitle('📦 STASH REMOVE')
-            .setColor('Red')
-            .addFields(
-                { name: '👤 User', value: interaction.user.tag },
-                { name: '📦 Item', value: item },
-                { name: '➖ Cantitate', value: `${cantitate}` },
-                { name: '📊 Stoc nou', value: `${stash.get(item)}` }
-            )
-            .setTimestamp();
-
-        await logsChannel.send({ embeds: [embed] });
-
-        return interaction.reply({
-            content: `❌ Ai scos ${cantitate} ${item}`,
-            flags: MessageFlags.Ephemeral
-        });
-    }
-
-    // ================= VIEW LOG =================
-    if (sub === 'log') {
-
-        let text = '';
-
-        stashLogs.forEach((logs, key) => {
-
-            text += `\n📦 ${key.toUpperCase()}\n`;
-
-            logs.slice(-5).forEach(l => {
-                text += `- ${l.action} | ${l.cantitate} | ${l.user} | ${l.data}\n`;
-            });
-
-        });
-
-        if (text === '') {
-            text = 'Nu exista loguri.';
-        }
-
-        const embed = new EmbedBuilder()
-            .setTitle('📜 STASH LOGS')
-            .setColor('Blue')
-            .setDescription(text)
-            .setTimestamp();
-
-        return interaction.reply({
-            embeds: [embed],
-            flags: MessageFlags.Ephemeral
-        });
-    }
-}
 
 // ================= LOGIN =================
 
