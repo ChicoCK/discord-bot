@@ -48,6 +48,9 @@ const tasks = new Map();
 const warns = new Map();
 const amenzi = new Map();
 
+const invoices = new Map(); // invoice storage
+const invoiceLogs = new Map(); // invoice history
+
 // ================= CONFIG TASK =================
 
 const taskChannelId = '1494860985066848357';
@@ -252,6 +255,59 @@ client.once(Events.ClientReady, async () => {
                     .setDescription('Membrul')
 
                     .setRequired(true)
+            ),
+
+        // ================= INVOICE =================
+
+        new SlashCommandBuilder()
+
+            .setName('invoice')
+
+            .setDescription('Sistem facturi')
+
+            .addSubcommand(cmd =>
+                cmd.setName('create')
+                    .setDescription('Creaza o factura noua')
+                    .addUserOption(opt =>
+                        opt.setName('client')
+                            .setDescription('Clientul')
+                            .setRequired(true)
+                    )
+                    .addStringOption(opt =>
+                        opt.setName('descriere')
+                            .setDescription('Descrierea serviciului')
+                            .setRequired(true)
+                    )
+                    .addIntegerOption(opt =>
+                        opt.setName('suma')
+                            .setDescription('Suma facturii')
+                            .setRequired(true)
+                    )
+            )
+
+            .addSubcommand(cmd =>
+                cmd.setName('view')
+                    .setDescription('Vezi facturile unui client')
+                    .addUserOption(opt =>
+                        opt.setName('client')
+                            .setDescription('Clientul')
+                            .setRequired(true)
+                    )
+            )
+
+            .addSubcommand(cmd =>
+                cmd.setName('pay')
+                    .setDescription('Marcheaza o factura ca platita')
+                    .addStringOption(opt =>
+                        opt.setName('invoice_id')
+                            .setDescription('ID-ul facturii')
+                            .setRequired(true)
+                    )
+            )
+
+            .addSubcommand(cmd =>
+                cmd.setName('logs')
+                    .setDescription('Vezi logurile facturilor')
             )
 
     ].map(cmd => cmd.toJSON());
@@ -294,7 +350,7 @@ client.on(Events.InteractionCreate, async interaction => {
     try {
 
         if (interaction.isChatInputCommand()) {
-
+            
             // =====================================================
             // /CV
             // =====================================================
@@ -900,6 +956,220 @@ client.on(Events.InteractionCreate, async interaction => {
 
                     flags: MessageFlags.Ephemeral
                 });
+            }
+
+            // =====================================================
+            // /INVOICE
+            // =====================================================
+
+            if (interaction.commandName === 'invoice') {
+
+                const isLeadership = interaction.member.roles.cache.some(role =>
+                    leadershipRoleIds.includes(role.id)
+                );
+
+                if (!isLeadership) {
+
+                    return interaction.reply({
+
+                        content: '❌ Nu ai permisiune.',
+
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+
+                const sub = interaction.options.getSubcommand();
+                const logChannel = await client.channels.fetch(logChannelId);
+
+                // ================= CREATE =================
+
+                if (sub === 'create') {
+
+                    const client_user = interaction.options.getUser('client');
+                    const descriere = interaction.options.getString('descriere');
+                    const suma = interaction.options.getInteger('suma');
+
+                    const invoiceId = 'INV-' + Date.now().toString();
+
+                    if (!invoices.has(client_user.id)) {
+                        invoices.set(client_user.id, []);
+                    }
+
+                    invoices.get(client_user.id).push({
+                        id: invoiceId,
+                        descriere,
+                        suma,
+                        status: 'PENDING',
+                        createdAt: new Date().toLocaleDateString(),
+                        createdBy: interaction.user.tag,
+                        paidAt: null
+                    });
+
+                    if (!invoiceLogs.has('all')) {
+                        invoiceLogs.set('all', []);
+                    }
+
+                    invoiceLogs.get('all').push({
+                        action: 'CREATE',
+                        invoiceId,
+                        client: client_user.tag,
+                        suma,
+                        user: interaction.user.tag,
+                        data: new Date().toLocaleString()
+                    });
+
+                    const embed = new EmbedBuilder()
+                        .setTitle('📄 FACTURA NOUA')
+                        .setColor('Blue')
+                        .addFields(
+                            { name: '👤 Client', value: `<@${client_user.id}>` },
+                            { name: '📝 Descriere', value: descriere },
+                            { name: '💰 Suma', value: `${suma}$` },
+                            { name: '📌 Status', value: '🔴 PENDING' },
+                            { name: '🆔 Invoice ID', value: invoiceId }
+                        )
+                        .setTimestamp();
+
+                    await logChannel.send({ embeds: [embed] });
+
+                    return interaction.reply({
+                        content: `✅ Factura creata cu ID: \`${invoiceId}\``,
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+
+                // ================= VIEW =================
+
+                if (sub === 'view') {
+
+                    const client_user = interaction.options.getUser('client');
+                    const userInvoices = invoices.get(client_user.id) || [];
+
+                    if (userInvoices.length === 0) {
+
+                        return interaction.reply({
+                            content: '✅ Acest client nu are facturi.',
+                            flags: MessageFlags.Ephemeral
+                        });
+                    }
+
+                    const text = userInvoices.map((inv, index) =>
+
+                        `${index + 1}. **${inv.id}** | ${inv.suma}$ | ${inv.status} | ${inv.descriere}`
+                    ).join('\n');
+
+                    const totalAmount = userInvoices.reduce((acc, item) => acc + item.suma, 0);
+                    const pendingAmount = userInvoices.filter(inv => inv.status === 'PENDING').reduce((acc, item) => acc + item.suma, 0);
+
+                    const embed = new EmbedBuilder()
+                        .setTitle(`📄 Facturi ${client_user.tag}`)
+                        .setColor('Blue')
+                        .setDescription(text)
+                        .addFields(
+                            { name: '💰 Total', value: `${totalAmount}$`, inline: true },
+                            { name: '🔴 De plată', value: `${pendingAmount}$`, inline: true }
+                        )
+                        .setTimestamp();
+
+                    return interaction.reply({
+                        embeds: [embed],
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+
+                // ================= PAY =================
+
+                if (sub === 'pay') {
+
+                    const invoiceId = interaction.options.getString('invoice_id');
+                    let found = false;
+
+                    invoices.forEach((userInvoices, userId) => {
+                        const invoice = userInvoices.find(inv => inv.id === invoiceId);
+
+                        if (invoice) {
+                            if (invoice.status === 'PAID') {
+                                found = 'already';
+                                return;
+                            }
+
+                            invoice.status = 'PAID';
+                            invoice.paidAt = new Date().toLocaleDateString();
+
+                            found = true;
+
+                            invoiceLogs.get('all').push({
+                                action: 'PAID',
+                                invoiceId,
+                                suma: invoice.suma,
+                                user: interaction.user.tag,
+                                data: new Date().toLocaleString()
+                            });
+
+                            const embed = new EmbedBuilder()
+                                .setTitle('✅ FACTURA PLATITA')
+                                .setColor('Green')
+                                .addFields(
+                                    { name: '🆔 Invoice ID', value: invoiceId },
+                                    { name: '💰 Suma', value: `${invoice.suma}$` },
+                                    { name: '📅 Data plații', value: invoice.paidAt },
+                                    { name: '🛡️ De către', value: interaction.user.tag }
+                                )
+                                .setTimestamp();
+
+                            logChannel.send({ embeds: [embed] });
+                        }
+                    });
+
+                    if (found === 'already') {
+                        return interaction.reply({
+                            content: '❌ Aceasta factura a fost deja platita.',
+                            flags: MessageFlags.Ephemeral
+                        });
+                    }
+
+                    if (!found) {
+                        return interaction.reply({
+                            content: '❌ Factura nu a fost gasita.',
+                            flags: MessageFlags.Ephemeral
+                        });
+                    }
+
+                    return interaction.reply({
+                        content: `✅ Factura ${invoiceId} marcata ca platita.`,
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+
+                // ================= LOGS =================
+
+                if (sub === 'logs') {
+
+                    const allLogs = invoiceLogs.get('all') || [];
+
+                    if (allLogs.length === 0) {
+                        return interaction.reply({
+                            content: '❌ Nu exista loguri.',
+                            flags: MessageFlags.Ephemeral
+                        });
+                    }
+
+                    let text = '';
+                    allLogs.slice(-10).forEach(log => {
+                        text += `\`${log.action}\` | ${log.invoiceId} | ${log.suma}$ | ${log.user} | ${log.data}\n`;
+                    });
+
+                    const embed = new EmbedBuilder()
+                        .setTitle('📜 INVOICE LOGS')
+                        .setColor('Blue')
+                        .setDescription(text)
+                        .setTimestamp();
+
+                    return interaction.reply({
+                        embeds: [embed],
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
             }
         }
 
