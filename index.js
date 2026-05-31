@@ -55,7 +55,9 @@ const leaveHistory = new Map(); // leave request history
 
 const taskChannelId = '1494860985066848357';
 const taskLogsChannelId = '1503906070010269721';
-const leaveLogChannelId = '1234567890'; // Update this with your actual leave channel ID
+const invoireChannelId = '1493771851485417532'; // Invoire channel where requests are posted
+const invoireLogsChannelId = '1510636374812790865'; // Logs channel for accept/decline actions
+const invoirePermissionRoleId = '1504935162092195930'; // Permission role for buttons
 
 let leaveRequestIdCounter = 0;
 
@@ -370,10 +372,10 @@ function startExpirationChecker() {
                         request.status = 'EXPIRED';
                         
                         try {
-                            const leaveChannel = await client.channels.fetch(leaveLogChannelId);
+                            const invoireChannel = await client.channels.fetch(invoireLogsChannelId);
                             const user = await client.users.fetch(userId);
                             
-                            await leaveChannel.send({
+                            await invoireChannel.send({
                                 embeds: [
                                     new EmbedBuilder()
                                         .setTitle('⏰ Cerere de concediu expirata')
@@ -1084,37 +1086,46 @@ client.on(Events.InteractionCreate, async interaction => {
                         .addFields(
                             { name: '🆔 ID', value: `#${requestId}` },
                             { name: '👤 Membru', value: `<@${interaction.user.id}>` },
-                            { name: '📅 Zile', value: `${zile}` },
+                            { name: '📅 Zile Solicitate', value: `${zile}` },
                             { name: '📝 Motiv', value: motiv },
-                            { name: '🚀 Data inceput', value: startDate.toLocaleDateString() },
-                            { name: '🏁 Data sfarsit', value: endDate.toLocaleDateString() },
+                            { name: '🚀 Data Inceput', value: startDate.toLocaleDateString() },
+                            { name: '🏁 Data Sfarsit', value: endDate.toLocaleDateString() },
                             { name: '📌 Status', value: '🟡 PENDING' }
                         )
-                        .setFooter({ text: `Request ID: ${requestId}` })
+                        .setThumbnail(interaction.user.displayAvatarURL())
+                        .setFooter({ text: `User ID: ${interaction.user.id}` })
                         .setTimestamp();
 
                     const buttons = new ActionRowBuilder()
                         .addComponents(
                             new ButtonBuilder()
                                 .setCustomId(`invoire_accept_${requestId}`)
-                                .setLabel('Aproba')
+                                .setLabel('✅ Aproba')
                                 .setStyle(ButtonStyle.Success),
                             new ButtonBuilder()
                                 .setCustomId(`invoire_reject_${requestId}`)
-                                .setLabel('Respinge')
+                                .setLabel('❌ Respinge')
                                 .setStyle(ButtonStyle.Danger)
                         );
 
-                    const leaveChannel = await client.channels.fetch(leaveLogChannelId);
-                    await leaveChannel.send({
-                        embeds: [embed],
-                        components: [buttons]
-                    });
+                    try {
+                        const invoireChannel = await client.channels.fetch(invoireChannelId);
+                        await invoireChannel.send({
+                            embeds: [embed],
+                            components: [buttons]
+                        });
 
-                    return interaction.reply({
-                        content: `✅ Cerere de concediu creata cu ID: \`#${requestId}\``,
-                        flags: MessageFlags.Ephemeral
-                    });
+                        return await interaction.reply({
+                            content: `✅ Cerere de concediu creata cu ID: \`#${requestId}\`\n📅 Data: ${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`,
+                            flags: MessageFlags.Ephemeral
+                        });
+                    } catch (err) {
+                        console.error('Error sending invoire embed:', err);
+                        return await interaction.reply({
+                            content: '❌ Eroare la crearea cererii de concediu.',
+                            flags: MessageFlags.Ephemeral
+                        });
+                    }
                 }
 
                 // ================= ACCEPT =================
@@ -1166,8 +1177,8 @@ client.on(Events.InteractionCreate, async interaction => {
                         )
                         .setTimestamp();
 
-                    const leaveChannel = await client.channels.fetch(leaveLogChannelId);
-                    await leaveChannel.send({ embeds: [embed] });
+                    const logsChannel = await client.channels.fetch(invoireLogsChannelId);
+                    await logsChannel.send({ embeds: [embed] });
 
                     return interaction.reply({
                         content: `✅ Cererea #${id} a fost aprobata.`,
@@ -1224,8 +1235,8 @@ client.on(Events.InteractionCreate, async interaction => {
                         )
                         .setTimestamp();
 
-                    const leaveChannel = await client.channels.fetch(leaveLogChannelId);
-                    await leaveChannel.send({ embeds: [embed] });
+                    const logsChannel = await client.channels.fetch(invoireLogsChannelId);
+                    await logsChannel.send({ embeds: [embed] });
 
                     return interaction.reply({
                         content: `✅ Cererea #${id} a fost respinsa.`,
@@ -1429,38 +1440,38 @@ client.on(Events.InteractionCreate, async interaction => {
 
             if (interaction.customId.startsWith('invoire_accept_')) {
 
-                const isLeadership = interaction.member.roles.cache.some(role =>
-                    leadershipRoleIds.includes(role.id)
-                );
+                const hasPermission = interaction.member.roles.cache.has(invoirePermissionRoleId);
 
-                if (!isLeadership) {
+                if (!hasPermission) {
                     return interaction.reply({
-                        content: '❌ Nu ai permisiune.',
+                        content: '❌ Nu ai permisiune sa accepti cereri de concediu.',
                         flags: MessageFlags.Ephemeral
                     });
                 }
 
                 const requestId = parseInt(interaction.customId.split('_')[2]);
                 let found = false;
+                let userId = null;
 
-                leaveRequests.forEach((requests, userId) => {
+                leaveRequests.forEach((requests, uId) => {
                     const request = requests.find(req => req.id === requestId);
-                    if (request) {
+                    if (request && request.status === 'PENDING') {
                         found = true;
+                        userId = uId;
                         request.status = 'ACCEPTED';
                         request.approvedBy = interaction.user.tag;
 
                         const historyEntry = { ...request };
-                        if (!leaveHistory.has(userId)) {
-                            leaveHistory.set(userId, []);
+                        if (!leaveHistory.has(uId)) {
+                            leaveHistory.set(uId, []);
                         }
-                        leaveHistory.get(userId).push(historyEntry);
+                        leaveHistory.get(uId).push(historyEntry);
                     }
                 });
 
                 if (!found) {
                     return interaction.reply({
-                        content: '❌ Cererea nu a fost gasita.',
+                        content: '❌ Cererea nu a fost gasita sau a fost deja procesata.',
                         flags: MessageFlags.Ephemeral
                     });
                 }
@@ -1481,46 +1492,63 @@ client.on(Events.InteractionCreate, async interaction => {
                     components: [disabledButtons]
                 });
 
-                return interaction.followUp({
-                    content: `✅ Cererea #${requestId} a fost aprobata de ${interaction.user.tag}`,
+                // Send log message in Romanian
+                const logsChannel = await client.channels.fetch(invoireLogsChannelId);
+                await logsChannel.send({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setTitle('✅ INVOIRE APROBATA')
+                            .setColor('Green')
+                            .setDescription(`📢 Supervizorul ${interaction.user.tag} a ACCEPTAT Invoirea lui <@${userId}>!`)
+                            .addFields(
+                                { name: '🆔 ID Cerere', value: `#${requestId}` },
+                                { name: '👤 Membrul', value: `<@${userId}>` },
+                                { name: '🛡️ Aprobata de', value: interaction.user.tag }
+                            )
+                            .setTimestamp()
+                    ]
+                });
+
+                return interaction.reply({
+                    content: `✅ Cererea #${requestId} a fost APROBATA de ${interaction.user.tag}`,
                     flags: MessageFlags.Ephemeral
                 });
             }
 
             if (interaction.customId.startsWith('invoire_reject_')) {
 
-                const isLeadership = interaction.member.roles.cache.some(role =>
-                    leadershipRoleIds.includes(role.id)
-                );
+                const hasPermission = interaction.member.roles.cache.has(invoirePermissionRoleId);
 
-                if (!isLeadership) {
+                if (!hasPermission) {
                     return interaction.reply({
-                        content: '❌ Nu ai permisiune.',
+                        content: '❌ Nu ai permisiune sa respingi cereri de concediu.',
                         flags: MessageFlags.Ephemeral
                     });
                 }
 
                 const requestId = parseInt(interaction.customId.split('_')[2]);
                 let found = false;
+                let userId = null;
 
-                leaveRequests.forEach((requests, userId) => {
+                leaveRequests.forEach((requests, uId) => {
                     const request = requests.find(req => req.id === requestId);
-                    if (request) {
+                    if (request && request.status === 'PENDING') {
                         found = true;
+                        userId = uId;
                         request.status = 'REJECTED';
                         request.rejectedBy = interaction.user.tag;
 
                         const historyEntry = { ...request };
-                        if (!leaveHistory.has(userId)) {
-                            leaveHistory.set(userId, []);
+                        if (!leaveHistory.has(uId)) {
+                            leaveHistory.set(uId, []);
                         }
-                        leaveHistory.get(userId).push(historyEntry);
+                        leaveHistory.get(uId).push(historyEntry);
                     }
                 });
 
                 if (!found) {
                     return interaction.reply({
-                        content: '❌ Cererea nu a fost gasita.',
+                        content: '❌ Cererea nu a fost gasita sau a fost deja procesata.',
                         flags: MessageFlags.Ephemeral
                     });
                 }
@@ -1541,8 +1569,25 @@ client.on(Events.InteractionCreate, async interaction => {
                     components: [disabledButtons]
                 });
 
-                return interaction.followUp({
-                    content: `✅ Cererea #${requestId} a fost respinsa de ${interaction.user.tag}`,
+                // Send log message in Romanian
+                const logsChannel = await client.channels.fetch(invoireLogsChannelId);
+                await logsChannel.send({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setTitle('❌ INVOIRE RESPINSA')
+                            .setColor('Red')
+                            .setDescription(`📢 Supervizorul ${interaction.user.tag} a RESPINS Invoirea lui <@${userId}>!`)
+                            .addFields(
+                                { name: '🆔 ID Cerere', value: `#${requestId}` },
+                                { name: '👤 Membrul', value: `<@${userId}>` },
+                                { name: '🛡️ Respinsa de', value: interaction.user.tag }
+                            )
+                            .setTimestamp()
+                    ]
+                });
+
+                return interaction.reply({
+                    content: `✅ Cererea #${requestId} a fost RESPINSA de ${interaction.user.tag}`,
                     flags: MessageFlags.Ephemeral
                 });
             }
