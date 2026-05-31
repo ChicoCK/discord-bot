@@ -48,13 +48,16 @@ const tasks = new Map();
 const warns = new Map();
 const amenzi = new Map();
 
-const invoices = new Map(); // invoice storage
-const invoiceLogs = new Map(); // invoice history
+const leaveRequests = new Map(); // leave request storage
+const leaveHistory = new Map(); // leave request history
 
-// ================= CONFIG TASK =================
+// ================= CONFIG =================
 
 const taskChannelId = '1494860985066848357';
 const taskLogsChannelId = '1503906070010269721';
+const leaveLogChannelId = '1234567890'; // Update this with your actual leave channel ID
+
+let leaveRequestIdCounter = 0;
 
 const leadershipRoleIds = [
     '1493768690133499926'
@@ -257,57 +260,62 @@ client.once(Events.ClientReady, async () => {
                     .setRequired(true)
             ),
 
-        // ================= INVOICE =================
+        // ================= INVOIRE =================
 
         new SlashCommandBuilder()
 
-            .setName('invoice')
+            .setName('invoire')
 
-            .setDescription('Sistem facturi')
+            .setDescription('Sistem cereri de concediu')
 
             .addSubcommand(cmd =>
                 cmd.setName('create')
-                    .setDescription('Creaza o factura noua')
-                    .addUserOption(opt =>
-                        opt.setName('client')
-                            .setDescription('Clientul')
-                            .setRequired(true)
-                    )
-                    .addStringOption(opt =>
-                        opt.setName('descriere')
-                            .setDescription('Descrierea serviciului')
-                            .setRequired(true)
-                    )
+                    .setDescription('Creeaza o cerere de concediu')
                     .addIntegerOption(opt =>
-                        opt.setName('suma')
-                            .setDescription('Suma facturii')
+                        opt.setName('zile')
+                            .setDescription('Numarul de zile')
                             .setRequired(true)
                     )
-            )
-
-            .addSubcommand(cmd =>
-                cmd.setName('view')
-                    .setDescription('Vezi facturile unui client')
-                    .addUserOption(opt =>
-                        opt.setName('client')
-                            .setDescription('Clientul')
-                            .setRequired(true)
-                    )
-            )
-
-            .addSubcommand(cmd =>
-                cmd.setName('pay')
-                    .setDescription('Marcheaza o factura ca platita')
                     .addStringOption(opt =>
-                        opt.setName('invoice_id')
-                            .setDescription('ID-ul facturii')
+                        opt.setName('motiv')
+                            .setDescription('Motivul concediului')
                             .setRequired(true)
                     )
             )
 
             .addSubcommand(cmd =>
-                cmd.setName('logs')
-                    .setDescription('Vezi logurile facturilor')
+                cmd.setName('accept')
+                    .setDescription('Aproba o cerere de concediu')
+                    .addIntegerOption(opt =>
+                        opt.setName('id')
+                            .setDescription('ID-ul cererii')
+                            .setRequired(true)
+                    )
+            )
+
+            .addSubcommand(cmd =>
+                cmd.setName('reject')
+                    .setDescription('Respinge o cerere de concediu')
+                    .addIntegerOption(opt =>
+                        opt.setName('id')
+                            .setDescription('ID-ul cererii')
+                            .setRequired(true)
+                    )
+            )
+
+            .addSubcommand(cmd =>
+                cmd.setName('active')
+                    .setDescription('Arata toate concediile active')
+            )
+
+            .addSubcommand(cmd =>
+                cmd.setName('history')
+                    .setDescription('Vezi istoric cereri de concediu')
+                    .addUserOption(opt =>
+                        opt.setName('membru')
+                            .setDescription('Membrul')
+                            .setRequired(true)
+                    )
             )
 
     ].map(cmd => cmd.toJSON());
@@ -336,12 +344,79 @@ client.once(Events.ClientReady, async () => {
 
         console.error(err);
     }
+
+    // Start expiration checker
+    startExpirationChecker();
 });
 
 // ================= ERRORS =================
 
 process.on('unhandledRejection', console.error);
 process.on('uncaughtException', console.error);
+
+// ================= EXPIRATION CHECKER =================
+
+function startExpirationChecker() {
+    setInterval(async () => {
+        const now = new Date();
+        
+        leaveRequests.forEach((requests, userId) => {
+            requests.forEach(async (request, index) => {
+                if (request.status === 'PENDING') {
+                    const endDate = new Date(request.endDate);
+                    
+                    // Check if expired
+                    if (now > endDate) {
+                        request.status = 'EXPIRED';
+                        
+                        try {
+                            const leaveChannel = await client.channels.fetch(leaveLogChannelId);
+                            const user = await client.users.fetch(userId);
+                            
+                            await leaveChannel.send({
+                                embeds: [
+                                    new EmbedBuilder()
+                                        .setTitle('⏰ Cerere de concediu expirata')
+                                        .setColor('Red')
+                                        .addFields(
+                                            { name: '👤 Membru', value: `<@${userId}>` },
+                                            { name: '🆔 ID', value: `#${request.id}` },
+                                            { name: '📅 Data expirarii', value: request.endDate }
+                                        )
+                                        .setTimestamp()
+                                ]
+                            });
+                        } catch (err) {
+                            console.error('Error sending expiration message:', err);
+                        }
+                    }
+                    
+                    // Check for 24h reminder
+                    const reminderDate = new Date(endDate.getTime() - 24 * 60 * 60 * 1000);
+                    if (now >= reminderDate && now < new Date(reminderDate.getTime() + 60 * 60 * 1000)) {
+                        try {
+                            const user = await client.users.fetch(userId);
+                            await user.send({
+                                embeds: [
+                                    new EmbedBuilder()
+                                        .setTitle('⏰ Reminder: Concediul expira maine!')
+                                        .setColor('Yellow')
+                                        .addFields(
+                                            { name: '🆔 ID Cerere', value: `#${request.id}` },
+                                            { name: '📅 Data expirarii', value: request.endDate }
+                                        )
+                                        .setTimestamp()
+                                ]
+                            });
+                        } catch (err) {
+                            console.error('Error sending reminder:', err);
+                        }
+                    }
+                }
+            });
+        });
+    }, 60 * 1000); // Check every minute
+}
 
 // ================= INTERACTIONS =================
 
@@ -959,116 +1034,238 @@ client.on(Events.InteractionCreate, async interaction => {
             }
 
             // =====================================================
-            // /INVOICE
+            // /INVOIRE
             // =====================================================
 
-            if (interaction.commandName === 'invoice') {
-
-                const isLeadership = interaction.member.roles.cache.some(role =>
-                    leadershipRoleIds.includes(role.id)
-                );
-
-                if (!isLeadership) {
-
-                    return interaction.reply({
-
-                        content: '❌ Nu ai permisiune.',
-
-                        flags: MessageFlags.Ephemeral
-                    });
-                }
+            if (interaction.commandName === 'invoire') {
 
                 const sub = interaction.options.getSubcommand();
-                const logChannel = await client.channels.fetch(logChannelId);
 
                 // ================= CREATE =================
 
                 if (sub === 'create') {
 
-                    const client_user = interaction.options.getUser('client');
-                    const descriere = interaction.options.getString('descriere');
-                    const suma = interaction.options.getInteger('suma');
+                    const zile = interaction.options.getInteger('zile');
+                    const motiv = interaction.options.getString('motiv');
 
-                    const invoiceId = 'INV-' + Date.now().toString();
+                    leaveRequestIdCounter++;
+                    const requestId = leaveRequestIdCounter;
 
-                    if (!invoices.has(client_user.id)) {
-                        invoices.set(client_user.id, []);
+                    const startDate = new Date();
+                    const endDate = new Date(startDate);
+                    endDate.setDate(endDate.getDate() + zile);
+
+                    if (!leaveRequests.has(interaction.user.id)) {
+                        leaveRequests.set(interaction.user.id, []);
                     }
 
-                    invoices.get(client_user.id).push({
-                        id: invoiceId,
-                        descriere,
-                        suma,
+                    if (!leaveHistory.has(interaction.user.id)) {
+                        leaveHistory.set(interaction.user.id, []);
+                    }
+
+                    const request = {
+                        id: requestId,
+                        userId: interaction.user.id,
+                        zile,
+                        motiv,
+                        startDate: startDate.toLocaleDateString(),
+                        endDate: endDate.toLocaleDateString(),
                         status: 'PENDING',
-                        createdAt: new Date().toLocaleDateString(),
-                        createdBy: interaction.user.tag,
-                        paidAt: null
-                    });
+                        createdAt: new Date(),
+                        approvedBy: null,
+                        rejectedBy: null
+                    };
 
-                    if (!invoiceLogs.has('all')) {
-                        invoiceLogs.set('all', []);
-                    }
-
-                    invoiceLogs.get('all').push({
-                        action: 'CREATE',
-                        invoiceId,
-                        client: client_user.tag,
-                        suma,
-                        user: interaction.user.tag,
-                        data: new Date().toLocaleString()
-                    });
+                    leaveRequests.get(interaction.user.id).push(request);
 
                     const embed = new EmbedBuilder()
-                        .setTitle('📄 FACTURA NOUA')
+                        .setTitle('📋 CERERE DE CONCEDIU NOUA')
                         .setColor('Blue')
                         .addFields(
-                            { name: '👤 Client', value: `<@${client_user.id}>` },
-                            { name: '📝 Descriere', value: descriere },
-                            { name: '💰 Suma', value: `${suma}$` },
-                            { name: '📌 Status', value: '🔴 PENDING' },
-                            { name: '🆔 Invoice ID', value: invoiceId }
+                            { name: '🆔 ID', value: `#${requestId}` },
+                            { name: '👤 Membru', value: `<@${interaction.user.id}>` },
+                            { name: '📅 Zile', value: `${zile}` },
+                            { name: '📝 Motiv', value: motiv },
+                            { name: '🚀 Data inceput', value: startDate.toLocaleDateString() },
+                            { name: '🏁 Data sfarsit', value: endDate.toLocaleDateString() },
+                            { name: '📌 Status', value: '🟡 PENDING' }
                         )
+                        .setFooter({ text: `Request ID: ${requestId}` })
                         .setTimestamp();
 
-                    await logChannel.send({ embeds: [embed] });
+                    const buttons = new ActionRowBuilder()
+                        .addComponents(
+                            new ButtonBuilder()
+                                .setCustomId(`invoire_accept_${requestId}`)
+                                .setLabel('Aproba')
+                                .setStyle(ButtonStyle.Success),
+                            new ButtonBuilder()
+                                .setCustomId(`invoire_reject_${requestId}`)
+                                .setLabel('Respinge')
+                                .setStyle(ButtonStyle.Danger)
+                        );
+
+                    const leaveChannel = await client.channels.fetch(leaveLogChannelId);
+                    await leaveChannel.send({
+                        embeds: [embed],
+                        components: [buttons]
+                    });
 
                     return interaction.reply({
-                        content: `✅ Factura creata cu ID: \`${invoiceId}\``,
+                        content: `✅ Cerere de concediu creata cu ID: \`#${requestId}\``,
                         flags: MessageFlags.Ephemeral
                     });
                 }
 
-                // ================= VIEW =================
+                // ================= ACCEPT =================
 
-                if (sub === 'view') {
+                if (sub === 'accept') {
 
-                    const client_user = interaction.options.getUser('client');
-                    const userInvoices = invoices.get(client_user.id) || [];
+                    const isLeadership = interaction.member.roles.cache.some(role =>
+                        leadershipRoleIds.includes(role.id)
+                    );
 
-                    if (userInvoices.length === 0) {
-
+                    if (!isLeadership) {
                         return interaction.reply({
-                            content: '✅ Acest client nu are facturi.',
+                            content: '❌ Nu ai permisiune.',
                             flags: MessageFlags.Ephemeral
                         });
                     }
 
-                    const text = userInvoices.map((inv, index) =>
+                    const id = interaction.options.getInteger('id');
+                    let found = false;
 
-                        `${index + 1}. **${inv.id}** | ${inv.suma}$ | ${inv.status} | ${inv.descriere}`
-                    ).join('\n');
+                    leaveRequests.forEach((requests, userId) => {
+                        const request = requests.find(req => req.id === id);
+                        if (request) {
+                            found = true;
+                            request.status = 'ACCEPTED';
+                            request.approvedBy = interaction.user.tag;
 
-                    const totalAmount = userInvoices.reduce((acc, item) => acc + item.suma, 0);
-                    const pendingAmount = userInvoices.filter(inv => inv.status === 'PENDING').reduce((acc, item) => acc + item.suma, 0);
+                            const historyEntry = { ...request };
+                            if (!leaveHistory.has(userId)) {
+                                leaveHistory.set(userId, []);
+                            }
+                            leaveHistory.get(userId).push(historyEntry);
+                        }
+                    });
+
+                    if (!found) {
+                        return interaction.reply({
+                            content: '❌ Cererea nu a fost gasita.',
+                            flags: MessageFlags.Ephemeral
+                        });
+                    }
 
                     const embed = new EmbedBuilder()
-                        .setTitle(`📄 Facturi ${client_user.tag}`)
+                        .setTitle('✅ CERERE DE CONCEDIU APROBATA')
+                        .setColor('Green')
+                        .addFields(
+                            { name: '🆔 ID', value: `#${id}` },
+                            { name: '🛡️ Aprobata de', value: interaction.user.tag }
+                        )
+                        .setTimestamp();
+
+                    const leaveChannel = await client.channels.fetch(leaveLogChannelId);
+                    await leaveChannel.send({ embeds: [embed] });
+
+                    return interaction.reply({
+                        content: `✅ Cererea #${id} a fost aprobata.`,
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+
+                // ================= REJECT =================
+
+                if (sub === 'reject') {
+
+                    const isLeadership = interaction.member.roles.cache.some(role =>
+                        leadershipRoleIds.includes(role.id)
+                    );
+
+                    if (!isLeadership) {
+                        return interaction.reply({
+                            content: '❌ Nu ai permisiune.',
+                            flags: MessageFlags.Ephemeral
+                        });
+                    }
+
+                    const id = interaction.options.getInteger('id');
+                    let found = false;
+
+                    leaveRequests.forEach((requests, userId) => {
+                        const request = requests.find(req => req.id === id);
+                        if (request) {
+                            found = true;
+                            request.status = 'REJECTED';
+                            request.rejectedBy = interaction.user.tag;
+
+                            const historyEntry = { ...request };
+                            if (!leaveHistory.has(userId)) {
+                                leaveHistory.set(userId, []);
+                            }
+                            leaveHistory.get(userId).push(historyEntry);
+                        }
+                    });
+
+                    if (!found) {
+                        return interaction.reply({
+                            content: '❌ Cererea nu a fost gasita.',
+                            flags: MessageFlags.Ephemeral
+                        });
+                    }
+
+                    const embed = new EmbedBuilder()
+                        .setTitle('❌ CERERE DE CONCEDIU RESPINSA')
+                        .setColor('Red')
+                        .addFields(
+                            { name: '🆔 ID', value: `#${id}` },
+                            { name: '🛡️ Respinsa de', value: interaction.user.tag }
+                        )
+                        .setTimestamp();
+
+                    const leaveChannel = await client.channels.fetch(leaveLogChannelId);
+                    await leaveChannel.send({ embeds: [embed] });
+
+                    return interaction.reply({
+                        content: `✅ Cererea #${id} a fost respinsa.`,
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+
+                // ================= ACTIVE =================
+
+                if (sub === 'active') {
+
+                    let text = '';
+                    let hasActive = false;
+
+                    leaveRequests.forEach((requests, userId) => {
+                        const activeRequests = requests.filter(req => req.status === 'PENDING' || req.status === 'ACCEPTED');
+                        
+                        if (activeRequests.length > 0) {
+                            hasActive = true;
+                            text += `\n**<@${userId}>**\n`;
+                            activeRequests.forEach(req => {
+                                const now = new Date();
+                                const endDate = new Date(req.endDate);
+                                const daysLeft = Math.ceil((endDate - now) / (1000 * 60 * 60 * 24));
+                                text += `#${req.id} | ${req.zile} zile | Status: ${req.status} | Zile ramase: ${daysLeft}\n`;
+                            });
+                        }
+                    });
+
+                    if (!hasActive) {
+                        return interaction.reply({
+                            content: '✅ Nu exista cereri de concediu active.',
+                            flags: MessageFlags.Ephemeral
+                        });
+                    }
+
+                    const embed = new EmbedBuilder()
+                        .setTitle('📋 CERERI DE CONCEDIU ACTIVE')
                         .setColor('Blue')
                         .setDescription(text)
-                        .addFields(
-                            { name: '💰 Total', value: `${totalAmount}$`, inline: true },
-                            { name: '🔴 De plată', value: `${pendingAmount}$`, inline: true }
-                        )
                         .setTimestamp();
 
                     return interaction.reply({
@@ -1077,90 +1274,27 @@ client.on(Events.InteractionCreate, async interaction => {
                     });
                 }
 
-                // ================= PAY =================
+                // ================= HISTORY =================
 
-                if (sub === 'pay') {
+                if (sub === 'history') {
 
-                    const invoiceId = interaction.options.getString('invoice_id');
-                    let found = false;
+                    const user = interaction.options.getUser('membru');
+                    const history = leaveHistory.get(user.id) || [];
 
-                    invoices.forEach((userInvoices, userId) => {
-                        const invoice = userInvoices.find(inv => inv.id === invoiceId);
-
-                        if (invoice) {
-                            if (invoice.status === 'PAID') {
-                                found = 'already';
-                                return;
-                            }
-
-                            invoice.status = 'PAID';
-                            invoice.paidAt = new Date().toLocaleDateString();
-
-                            found = true;
-
-                            invoiceLogs.get('all').push({
-                                action: 'PAID',
-                                invoiceId,
-                                suma: invoice.suma,
-                                user: interaction.user.tag,
-                                data: new Date().toLocaleString()
-                            });
-
-                            const embed = new EmbedBuilder()
-                                .setTitle('✅ FACTURA PLATITA')
-                                .setColor('Green')
-                                .addFields(
-                                    { name: '🆔 Invoice ID', value: invoiceId },
-                                    { name: '💰 Suma', value: `${invoice.suma}$` },
-                                    { name: '📅 Data plații', value: invoice.paidAt },
-                                    { name: '🛡️ De către', value: interaction.user.tag }
-                                )
-                                .setTimestamp();
-
-                            logChannel.send({ embeds: [embed] });
-                        }
-                    });
-
-                    if (found === 'already') {
+                    if (history.length === 0) {
                         return interaction.reply({
-                            content: '❌ Aceasta factura a fost deja platita.',
-                            flags: MessageFlags.Ephemeral
-                        });
-                    }
-
-                    if (!found) {
-                        return interaction.reply({
-                            content: '❌ Factura nu a fost gasita.',
-                            flags: MessageFlags.Ephemeral
-                        });
-                    }
-
-                    return interaction.reply({
-                        content: `✅ Factura ${invoiceId} marcata ca platita.`,
-                        flags: MessageFlags.Ephemeral
-                    });
-                }
-
-                // ================= LOGS =================
-
-                if (sub === 'logs') {
-
-                    const allLogs = invoiceLogs.get('all') || [];
-
-                    if (allLogs.length === 0) {
-                        return interaction.reply({
-                            content: '❌ Nu exista loguri.',
+                            content: `✅ ${user.tag} nu are istoric de cereri de concediu.`,
                             flags: MessageFlags.Ephemeral
                         });
                     }
 
                     let text = '';
-                    allLogs.slice(-10).forEach(log => {
-                        text += `\`${log.action}\` | ${log.invoiceId} | ${log.suma}$ | ${log.user} | ${log.data}\n`;
+                    history.forEach(req => {
+                        text += `#${req.id} | ${req.zile} zile | ${req.startDate} -> ${req.endDate} | Status: ${req.status}\n`;
                     });
 
                     const embed = new EmbedBuilder()
-                        .setTitle('📜 INVOICE LOGS')
+                        .setTitle(`📜 Istoric ${user.tag}`)
                         .setColor('Blue')
                         .setDescription(text)
                         .setTimestamp();
@@ -1290,10 +1424,138 @@ client.on(Events.InteractionCreate, async interaction => {
             }
 
             // =====================================================
+            // INVOIRE BUTTONS
+            // =====================================================
+
+            if (interaction.customId.startsWith('invoire_accept_')) {
+
+                const isLeadership = interaction.member.roles.cache.some(role =>
+                    leadershipRoleIds.includes(role.id)
+                );
+
+                if (!isLeadership) {
+                    return interaction.reply({
+                        content: '❌ Nu ai permisiune.',
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+
+                const requestId = parseInt(interaction.customId.split('_')[2]);
+                let found = false;
+
+                leaveRequests.forEach((requests, userId) => {
+                    const request = requests.find(req => req.id === requestId);
+                    if (request) {
+                        found = true;
+                        request.status = 'ACCEPTED';
+                        request.approvedBy = interaction.user.tag;
+
+                        const historyEntry = { ...request };
+                        if (!leaveHistory.has(userId)) {
+                            leaveHistory.set(userId, []);
+                        }
+                        leaveHistory.get(userId).push(historyEntry);
+                    }
+                });
+
+                if (!found) {
+                    return interaction.reply({
+                        content: '❌ Cererea nu a fost gasita.',
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+
+                const updatedEmbed = EmbedBuilder.from(interaction.message.embeds[0])
+                    .setColor('Green')
+                    .spliceFields(6, 1, { name: '📌 Status', value: '✅ ACCEPTED' });
+
+                const disabledButtons = new ActionRowBuilder()
+                    .addComponents(
+                        interaction.message.components[0].components.map(btn => 
+                            ButtonBuilder.from(btn).setDisabled(true)
+                        )
+                    );
+
+                await interaction.update({
+                    embeds: [updatedEmbed],
+                    components: [disabledButtons]
+                });
+
+                return interaction.followUp({
+                    content: `✅ Cererea #${requestId} a fost aprobata de ${interaction.user.tag}`,
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+
+            if (interaction.customId.startsWith('invoire_reject_')) {
+
+                const isLeadership = interaction.member.roles.cache.some(role =>
+                    leadershipRoleIds.includes(role.id)
+                );
+
+                if (!isLeadership) {
+                    return interaction.reply({
+                        content: '❌ Nu ai permisiune.',
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+
+                const requestId = parseInt(interaction.customId.split('_')[2]);
+                let found = false;
+
+                leaveRequests.forEach((requests, userId) => {
+                    const request = requests.find(req => req.id === requestId);
+                    if (request) {
+                        found = true;
+                        request.status = 'REJECTED';
+                        request.rejectedBy = interaction.user.tag;
+
+                        const historyEntry = { ...request };
+                        if (!leaveHistory.has(userId)) {
+                            leaveHistory.set(userId, []);
+                        }
+                        leaveHistory.get(userId).push(historyEntry);
+                    }
+                });
+
+                if (!found) {
+                    return interaction.reply({
+                        content: '❌ Cererea nu a fost gasita.',
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+
+                const updatedEmbed = EmbedBuilder.from(interaction.message.embeds[0])
+                    .setColor('Red')
+                    .spliceFields(6, 1, { name: '📌 Status', value: '❌ REJECTED' });
+
+                const disabledButtons = new ActionRowBuilder()
+                    .addComponents(
+                        interaction.message.components[0].components.map(btn => 
+                            ButtonBuilder.from(btn).setDisabled(true)
+                        )
+                    );
+
+                await interaction.update({
+                    embeds: [updatedEmbed],
+                    components: [disabledButtons]
+                });
+
+                return interaction.followUp({
+                    content: `✅ Cererea #${requestId} a fost respinsa de ${interaction.user.tag}`,
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+
+            // =====================================================
             // CV BUTTONS
             // =====================================================
 
             const embed = interaction.message.embeds[0];
+
+            if (!embed || !embed.footer || !embed.footer.text.includes('USER ID')) {
+                return;
+            }
 
             const userId = embed.footer.text.replace(
                 'USER ID: ',
