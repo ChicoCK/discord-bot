@@ -48,8 +48,6 @@ const tasks = new Map();
 const warns = new Map();
 const amenzi = new Map();
 
-const invoiri = new Map();
-
 // ================= CONFIG TASK =================
 
 const taskChannelId = '1494860985066848357';
@@ -58,8 +56,6 @@ const taskLogsChannelId = '1503906070010269721';
 const leadershipRoleIds = [
     '1493768690133499926'
 ];
-
-const invoireLogChannelId = '1510636374812790865';
 
 // ================= READY =================
 
@@ -285,22 +281,6 @@ client.once(Events.ClientReady, async () => {
         console.error(err);
     }
 });
-
-// ================= INVOIRE =================
-
-new SlashCommandBuilder()
-    .setName('invoire')
-    .setDescription('Cere invoire')
-    .addStringOption(opt =>
-        opt.setName('motiv')
-            .setDescription('Motiv invoire')
-            .setRequired(true)
-    )
-    .addStringOption(opt =>
-        opt.setName('durata')
-            .setDescription('Durata (ex: 2 zile)')
-            .setRequired(true)
-    ),
 
 // ================= ERRORS =================
 
@@ -954,84 +934,6 @@ client.on(Events.InteractionCreate, async interaction => {
         }
 
         // =====================================================
-        // INVOIRE
-        // =====================================================
-        
-        if (interaction.commandName === 'invoire') {
-
-    const motiv = interaction.options.getString('motiv');
-    const durata = interaction.options.getString('durata');
-
-    const id = Date.now().toString();
-
-    invoiri.set(id, {
-        userId: interaction.user.id,
-        motiv,
-        durata,
-        status: 'pending'
-    });
-
-    const embed = new EmbedBuilder()
-        .setTitle('📌 INVOIRE NOUĂ')
-        .setColor('Yellow')
-        .addFields(
-            { name: '👤 User', value: `<@${interaction.user.id}>` },
-            { name: '📌 Motiv', value: motiv },
-            { name: '⏳ Durata', value: durata },
-            { name: '📊 Status', value: '🟡 Pending' }
-        )
-        .setFooter({ text: `ID: ${id}` })
-        .setTimestamp();
-
-    const buttons = new ActionRowBuilder()
-        .addComponents(
-            new ButtonBuilder()
-                .setCustomId(`invoire_accept_${id}`)
-                .setLabel('Accept')
-                .setStyle(ButtonStyle.Success),
-
-            new ButtonBuilder()
-                .setCustomId(`invoire_reject_${id}`)
-                .setLabel('Reject')
-                .setStyle(ButtonStyle.Danger)
-        );
-
-    const logChannel = await client.channels.fetch(invoireLogChannelId);
-
-    await logChannel.send({
-        embeds: [embed],
-        components: [buttons]
-    });
-
-    // auto-expire 10 min
-    setTimeout(async () => {
-
-        const data = invoiri.get(id);
-        if (!data) return;
-        if (data.status !== 'pending') return;
-
-        invoiri.delete(id);
-
-        const ch = await client.channels.fetch(invoireLogChannelId);
-
-        ch.send({
-            embeds: [
-                new EmbedBuilder()
-                    .setTitle('⏳ INVOIRE EXPIRATĂ')
-                    .setColor('Grey')
-                    .setDescription(`<@${data.userId}> nu a fost procesată.`)
-            ]
-        });
-
-    }, 10 * 60 * 1000);
-
-    return interaction.reply({
-        content: '✅ Cererea ta a fost trimisă.',
-        flags: MessageFlags.Ephemeral
-    });
-}
-
-        // =====================================================
         // BUTTONS
         // =====================================================
 
@@ -1283,65 +1185,6 @@ client.on(Events.MessageCreate, async message => {
         console.error(err);
     }
 });
-
-        // =====================================================
-        // INVOIRE
-        // =====================================================
-
-if (interaction.customId.startsWith('invoire_accept_') || interaction.customId.startsWith('invoire_reject_')) {
-
-    const id = interaction.customId.split('_')[2];
-    const data = invoiri.get(id);
-
-    if (!data) {
-        return interaction.reply({
-            content: '❌ Invoirea nu exista.',
-            flags: MessageFlags.Ephemeral
-        });
-    }
-
-    const isLeadership = interaction.member.roles.cache.some(role =>
-        leadershipRoleIds.includes(role.id)
-    );
-
-    if (!isLeadership) {
-        return interaction.reply({
-            content: '❌ Nu ai permisiune.',
-            flags: MessageFlags.Ephemeral
-        });
-    }
-
-    const accepted = interaction.customId.startsWith('invoire_accept_');
-
-    data.status = accepted ? 'accepted' : 'rejected';
-    invoiri.set(id, data);
-
-    const user = await client.users.fetch(data.userId);
-
-    const embed = new EmbedBuilder()
-        .setTitle(accepted ? '✅ INVOIRE ACCEPTATĂ' : '❌ INVOIRE RESPINSĂ')
-        .setColor(accepted ? 'Green' : 'Red')
-        .addFields(
-            { name: '👤 User', value: `<@${data.userId}>` },
-            { name: '📌 Motiv', value: data.motiv },
-            { name: '⏳ Durata', value: data.durata },
-            { name: '🛡️ De către', value: interaction.user.tag }
-        )
-        .setTimestamp();
-
-    const logChannel = await client.channels.fetch(invoireLogChannelId);
-
-    await logChannel.send({ embeds: [embed] });
-
-    try {
-        await user.send(`📌 Invoirea ta a fost ${accepted ? 'ACCEPTATĂ' : 'RESPINSĂ'}.`);
-    } catch {}
-
-    return interaction.reply({
-        content: `✅ Ai ${accepted ? 'acceptat' : 'respins'} invoirea.`,
-        flags: MessageFlags.Ephemeral
-    });
-}
 
 // ================= LOGIN =================
 
