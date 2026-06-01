@@ -48,12 +48,18 @@ const tasks = new Map();
 const warns = new Map();
 const amenzi = new Map();
 
-const activeActivities = new Map();
+const leaveRequests = new Map(); // leave request storage
+const leaveHistory = new Map(); // leave request history
 
-// ================= CONFIG TASK =================
+// ================= CONFIG =================
 
 const taskChannelId = '1494860985066848357';
 const taskLogsChannelId = '1503906070010269721';
+const invoireChannelId = '1493771851485417532'; // Invoire channel where requests are posted
+const invoireLogsChannelId = '1510636374812790865'; // Logs channel for accept/decline actions
+const invoirePermissionRoleId = '1504935162092195930'; // Permission role for buttons
+
+let leaveRequestIdCounter = 0;
 
 const leadershipRoleIds = [
     '1493768690133499926'
@@ -66,7 +72,7 @@ client.once(Events.ClientReady, async () => {
     console.log(`🤖 Bot pornit ca ${client.user.tag}`);
 
     const commands = [
-        
+
         // ================= CV =================
 
         new SlashCommandBuilder()
@@ -254,6 +260,64 @@ client.once(Events.ClientReady, async () => {
                     .setDescription('Membrul')
 
                     .setRequired(true)
+            ),
+
+        // ================= INVOIRE =================
+
+        new SlashCommandBuilder()
+
+            .setName('invoire')
+
+            .setDescription('Sistem cereri de concediu')
+
+            .addSubcommand(cmd =>
+                cmd.setName('create')
+                    .setDescription('Creeaza o cerere de concediu')
+                    .addIntegerOption(opt =>
+                        opt.setName('zile')
+                            .setDescription('Numarul de zile')
+                            .setRequired(true)
+                    )
+                    .addStringOption(opt =>
+                        opt.setName('motiv')
+                            .setDescription('Motivul concediului')
+                            .setRequired(true)
+                    )
+            )
+
+            .addSubcommand(cmd =>
+                cmd.setName('accept')
+                    .setDescription('Aproba o cerere de concediu')
+                    .addIntegerOption(opt =>
+                        opt.setName('id')
+                            .setDescription('ID-ul cererii')
+                            .setRequired(true)
+                    )
+            )
+
+            .addSubcommand(cmd =>
+                cmd.setName('reject')
+                    .setDescription('Respinge o cerere de concediu')
+                    .addIntegerOption(opt =>
+                        opt.setName('id')
+                            .setDescription('ID-ul cererii')
+                            .setRequired(true)
+                    )
+            )
+
+            .addSubcommand(cmd =>
+                cmd.setName('active')
+                    .setDescription('Arata toate concediile active')
+            )
+
+            .addSubcommand(cmd =>
+                cmd.setName('history')
+                    .setDescription('Vezi istoric cereri de concediu')
+                    .addUserOption(opt =>
+                        opt.setName('membru')
+                            .setDescription('Membrul')
+                            .setRequired(true)
+                    )
             )
 
     ].map(cmd => cmd.toJSON());
@@ -282,37 +346,79 @@ client.once(Events.ClientReady, async () => {
 
         console.error(err);
     }
+
+    // Start expiration checker
+    startExpirationChecker();
 });
-
-        // ================= ACTIVITATE =================
-
-    new SlashCommandBuilder()
-        .setName('cv')
-        .setDescription('Completeaza CV-ul'),
-
-    new SlashCommandBuilder()
-        .setName('task')
-        .setDescription('Creaza un task')
-        ...
-
-    // 👇 AICI TREBUIE sa fie activitate
-    new SlashCommandBuilder()
-        .setName('activitate')
-        .setDescription('Sistem activitate RP')
-        .addSubcommand(sub =>
-            sub.setName('start')
-            .addStringOption(opt =>
-                opt.setName('tip')
-                .setRequired(true)
-            )
-        )
-
-].map(cmd => cmd.toJSON());
 
 // ================= ERRORS =================
 
 process.on('unhandledRejection', console.error);
 process.on('uncaughtException', console.error);
+
+// ================= EXPIRATION CHECKER =================
+
+function startExpirationChecker() {
+    setInterval(async () => {
+        const now = new Date();
+        
+        leaveRequests.forEach((requests, userId) => {
+            requests.forEach(async (request, index) => {
+                if (request.status === 'PENDING') {
+                    const endDate = new Date(request.endDate);
+                    
+                    // Check if expired
+                    if (now > endDate) {
+                        request.status = 'EXPIRED';
+                        
+                        try {
+                            const invoireChannel = await client.channels.fetch(invoireLogsChannelId);
+                            const user = await client.users.fetch(userId);
+                            
+                            await invoireChannel.send({
+                                embeds: [
+                                    new EmbedBuilder()
+                                        .setTitle('⏰ Cerere de concediu expirata')
+                                        .setColor('Red')
+                                        .addFields(
+                                            { name: '👤 Membru', value: `<@${userId}>` },
+                                            { name: '🆔 ID', value: `#${request.id}` },
+                                            { name: '📅 Data expirarii', value: request.endDate }
+                                        )
+                                        .setTimestamp()
+                                ]
+                            });
+                        } catch (err) {
+                            console.error('Error sending expiration message:', err);
+                        }
+                    }
+                    
+                    // Check for 24h reminder
+                    const reminderDate = new Date(endDate.getTime() - 24 * 60 * 60 * 1000);
+                    if (now >= reminderDate && now < new Date(reminderDate.getTime() + 60 * 60 * 1000)) {
+                        try {
+                            const user = await client.users.fetch(userId);
+                            await user.send({
+                                embeds: [
+                                    new EmbedBuilder()
+                                        .setTitle('⏰ Reminder: Concediul expira maine!')
+                                        .setColor('Yellow')
+                                        .addFields(
+                                            { name: '🆔 ID Cerere', value: `#${request.id}` },
+                                            { name: '📅 Data expirarii', value: request.endDate }
+                                        )
+                                        .setTimestamp()
+                                ]
+                            });
+                        } catch (err) {
+                            console.error('Error sending reminder:', err);
+                        }
+                    }
+                }
+            });
+        });
+    }, 60 * 1000); // Check every minute
+}
 
 // ================= INTERACTIONS =================
 
@@ -321,51 +427,6 @@ client.on(Events.InteractionCreate, async interaction => {
     try {
 
         if (interaction.isChatInputCommand()) {
-
-            // =====================================================
-            // /ACTIVITATE
-            // =====================================================
-
-if (interaction.commandName === 'activitate') {
-
-    const sub = interaction.options.getSubcommand();
-
-    if (sub === 'start') {
-
-        const tip = interaction.options.getString('tip');
-        const startTime = Date.now();
-
-        const embed = new EmbedBuilder()
-            .setColor('Green')
-            .setTitle('📁 ACTIVITATE RP - LIVE')
-            .addFields(
-                { name: '👮 Startat de', value: `<@${interaction.user.id}>` },
-                { name: '🎯 Tip activitate', value: tip },
-                { name: '🕒 Început la', value: `<t:${Math.floor(startTime / 1000)}:t>` },
-                { name: '⏳ Status', value: '🟢 ACTIVĂ' }
-            )
-            .setFooter({ text: 'OG LAND RP SYSTEM' });
-
-        const button = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId('stop_activity')
-                .setLabel('⛔ Oprește Activitatea')
-                .setStyle(ButtonStyle.Danger)
-        );
-
-        const msg = await interaction.reply({
-            embeds: [embed],
-            components: [button],
-            fetchReply: true
-        });
-
-        activeActivities.set(msg.id, {
-            startTime,
-            tip,
-            startedBy: interaction.user.id
-        });
-    }
-}
             
             // =====================================================
             // /CV
@@ -973,6 +1034,288 @@ if (interaction.commandName === 'activitate') {
                     flags: MessageFlags.Ephemeral
                 });
             }
+
+            // =====================================================
+            // /INVOIRE
+            // =====================================================
+
+            if (interaction.commandName === 'invoire') {
+
+                const sub = interaction.options.getSubcommand();
+
+                // ================= CREATE =================
+
+                if (sub === 'create') {
+
+                    const zile = interaction.options.getInteger('zile');
+                    const motiv = interaction.options.getString('motiv');
+
+                    leaveRequestIdCounter++;
+                    const requestId = leaveRequestIdCounter;
+
+                    const startDate = new Date();
+                    const endDate = new Date(startDate);
+                    endDate.setDate(endDate.getDate() + zile);
+
+                    if (!leaveRequests.has(interaction.user.id)) {
+                        leaveRequests.set(interaction.user.id, []);
+                    }
+
+                    if (!leaveHistory.has(interaction.user.id)) {
+                        leaveHistory.set(interaction.user.id, []);
+                    }
+
+                    const request = {
+                        id: requestId,
+                        userId: interaction.user.id,
+                        zile,
+                        motiv,
+                        startDate: startDate.toLocaleDateString(),
+                        endDate: endDate.toLocaleDateString(),
+                        status: 'PENDING',
+                        createdAt: new Date(),
+                        approvedBy: null,
+                        rejectedBy: null
+                    };
+
+                    leaveRequests.get(interaction.user.id).push(request);
+
+                    const embed = new EmbedBuilder()
+                        .setTitle('📋 CERERE DE CONCEDIU NOUA')
+                        .setColor('Blue')
+                        .addFields(
+                            { name: '🆔 ID', value: `#${requestId}` },
+                            { name: '👤 Membru', value: `<@${interaction.user.id}>` },
+                            { name: '📅 Zile Solicitate', value: `${zile}` },
+                            { name: '📝 Motiv', value: motiv },
+                            { name: '🚀 Data Inceput', value: startDate.toLocaleDateString() },
+                            { name: '🏁 Data Sfarsit', value: endDate.toLocaleDateString() },
+                            { name: '📌 Status', value: '🟡 PENDING' }
+                        )
+                        .setThumbnail(interaction.user.displayAvatarURL())
+                        .setFooter({ text: `User ID: ${interaction.user.id}` })
+                        .setTimestamp();
+
+                    const buttons = new ActionRowBuilder()
+                        .addComponents(
+                            new ButtonBuilder()
+                                .setCustomId(`invoire_accept_${requestId}`)
+                                .setLabel('✅ Aproba')
+                                .setStyle(ButtonStyle.Success),
+                            new ButtonBuilder()
+                                .setCustomId(`invoire_reject_${requestId}`)
+                                .setLabel('❌ Respinge')
+                                .setStyle(ButtonStyle.Danger)
+                        );
+
+                    try {
+                        const invoireChannel = await client.channels.fetch(invoireChannelId);
+                        await invoireChannel.send({
+                            embeds: [embed],
+                            components: [buttons]
+                        });
+
+                        return await interaction.reply({
+                            content: `✅ Cerere de concediu creata cu ID: \`#${requestId}\`\n📅 Data: ${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`,
+                            flags: MessageFlags.Ephemeral
+                        });
+                    } catch (err) {
+                        console.error('Error sending invoire embed:', err);
+                        return await interaction.reply({
+                            content: '❌ Eroare la crearea cererii de concediu.',
+                            flags: MessageFlags.Ephemeral
+                        });
+                    }
+                }
+
+                // ================= ACCEPT =================
+
+                if (sub === 'accept') {
+
+                    const isLeadership = interaction.member.roles.cache.some(role =>
+                        leadershipRoleIds.includes(role.id)
+                    );
+
+                    if (!isLeadership) {
+                        return interaction.reply({
+                            content: '❌ Nu ai permisiune.',
+                            flags: MessageFlags.Ephemeral
+                        });
+                    }
+
+                    const id = interaction.options.getInteger('id');
+                    let found = false;
+
+                    leaveRequests.forEach((requests, userId) => {
+                        const request = requests.find(req => req.id === id);
+                        if (request) {
+                            found = true;
+                            request.status = 'ACCEPTED';
+                            request.approvedBy = interaction.user.tag;
+
+                            const historyEntry = { ...request };
+                            if (!leaveHistory.has(userId)) {
+                                leaveHistory.set(userId, []);
+                            }
+                            leaveHistory.get(userId).push(historyEntry);
+                        }
+                    });
+
+                    if (!found) {
+                        return interaction.reply({
+                            content: '❌ Cererea nu a fost gasita.',
+                            flags: MessageFlags.Ephemeral
+                        });
+                    }
+
+                    const embed = new EmbedBuilder()
+                        .setTitle('✅ CERERE DE CONCEDIU APROBATA')
+                        .setColor('Green')
+                        .addFields(
+                            { name: '🆔 ID', value: `#${id}` },
+                            { name: '🛡️ Aprobata de', value: interaction.user.tag }
+                        )
+                        .setTimestamp();
+
+                    const logsChannel = await client.channels.fetch(invoireLogsChannelId);
+                    await logsChannel.send({ embeds: [embed] });
+
+                    return interaction.reply({
+                        content: `✅ Cererea #${id} a fost aprobata.`,
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+
+                // ================= REJECT =================
+
+                if (sub === 'reject') {
+
+                    const isLeadership = interaction.member.roles.cache.some(role =>
+                        leadershipRoleIds.includes(role.id)
+                    );
+
+                    if (!isLeadership) {
+                        return interaction.reply({
+                            content: '❌ Nu ai permisiune.',
+                            flags: MessageFlags.Ephemeral
+                        });
+                    }
+
+                    const id = interaction.options.getInteger('id');
+                    let found = false;
+
+                    leaveRequests.forEach((requests, userId) => {
+                        const request = requests.find(req => req.id === id);
+                        if (request) {
+                            found = true;
+                            request.status = 'REJECTED';
+                            request.rejectedBy = interaction.user.tag;
+
+                            const historyEntry = { ...request };
+                            if (!leaveHistory.has(userId)) {
+                                leaveHistory.set(userId, []);
+                            }
+                            leaveHistory.get(userId).push(historyEntry);
+                        }
+                    });
+
+                    if (!found) {
+                        return interaction.reply({
+                            content: '❌ Cererea nu a fost gasita.',
+                            flags: MessageFlags.Ephemeral
+                        });
+                    }
+
+                    const embed = new EmbedBuilder()
+                        .setTitle('❌ CERERE DE CONCEDIU RESPINSA')
+                        .setColor('Red')
+                        .addFields(
+                            { name: '🆔 ID', value: `#${id}` },
+                            { name: '🛡️ Respinsa de', value: interaction.user.tag }
+                        )
+                        .setTimestamp();
+
+                    const logsChannel = await client.channels.fetch(invoireLogsChannelId);
+                    await logsChannel.send({ embeds: [embed] });
+
+                    return interaction.reply({
+                        content: `✅ Cererea #${id} a fost respinsa.`,
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+
+                // ================= ACTIVE =================
+
+                if (sub === 'active') {
+
+                    let text = '';
+                    let hasActive = false;
+
+                    leaveRequests.forEach((requests, userId) => {
+                        const activeRequests = requests.filter(req => req.status === 'PENDING' || req.status === 'ACCEPTED');
+                        
+                        if (activeRequests.length > 0) {
+                            hasActive = true;
+                            text += `\n**<@${userId}>**\n`;
+                            activeRequests.forEach(req => {
+                                const now = new Date();
+                                const endDate = new Date(req.endDate);
+                                const daysLeft = Math.ceil((endDate - now) / (1000 * 60 * 60 * 24));
+                                text += `#${req.id} | ${req.zile} zile | Status: ${req.status} | Zile ramase: ${daysLeft}\n`;
+                            });
+                        }
+                    });
+
+                    if (!hasActive) {
+                        return interaction.reply({
+                            content: '✅ Nu exista cereri de concediu active.',
+                            flags: MessageFlags.Ephemeral
+                        });
+                    }
+
+                    const embed = new EmbedBuilder()
+                        .setTitle('📋 CERERI DE CONCEDIU ACTIVE')
+                        .setColor('Blue')
+                        .setDescription(text)
+                        .setTimestamp();
+
+                    return interaction.reply({
+                        embeds: [embed],
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+
+                // ================= HISTORY =================
+
+                if (sub === 'history') {
+
+                    const user = interaction.options.getUser('membru');
+                    const history = leaveHistory.get(user.id) || [];
+
+                    if (history.length === 0) {
+                        return interaction.reply({
+                            content: `✅ ${user.tag} nu are istoric de cereri de concediu.`,
+                            flags: MessageFlags.Ephemeral
+                        });
+                    }
+
+                    let text = '';
+                    history.forEach(req => {
+                        text += `#${req.id} | ${req.zile} zile | ${req.startDate} -> ${req.endDate} | Status: ${req.status}\n`;
+                    });
+
+                    const embed = new EmbedBuilder()
+                        .setTitle(`📜 Istoric ${user.tag}`)
+                        .setColor('Blue')
+                        .setDescription(text)
+                        .setTimestamp();
+
+                    return interaction.reply({
+                        embeds: [embed],
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+            }
         }
 
         // =====================================================
@@ -1092,10 +1435,172 @@ if (interaction.commandName === 'activitate') {
             }
 
             // =====================================================
+            // INVOIRE BUTTONS
+            // =====================================================
+
+            if (interaction.customId.startsWith('invoire_accept_')) {
+
+                const hasPermission = interaction.member.roles.cache.has(invoirePermissionRoleId);
+
+                if (!hasPermission) {
+                    return interaction.reply({
+                        content: '❌ Nu ai permisiune sa accepti cereri de concediu.',
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+
+                const requestId = parseInt(interaction.customId.split('_')[2]);
+                let found = false;
+                let userId = null;
+
+                leaveRequests.forEach((requests, uId) => {
+                    const request = requests.find(req => req.id === requestId);
+                    if (request && request.status === 'PENDING') {
+                        found = true;
+                        userId = uId;
+                        request.status = 'ACCEPTED';
+                        request.approvedBy = interaction.user.tag;
+
+                        const historyEntry = { ...request };
+                        if (!leaveHistory.has(uId)) {
+                            leaveHistory.set(uId, []);
+                        }
+                        leaveHistory.get(uId).push(historyEntry);
+                    }
+                });
+
+                if (!found) {
+                    return interaction.reply({
+                        content: '❌ Cererea nu a fost gasita sau a fost deja procesata.',
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+
+                const updatedEmbed = EmbedBuilder.from(interaction.message.embeds[0])
+                    .setColor('Green')
+                    .spliceFields(6, 1, { name: '📌 Status', value: '✅ ACCEPTED' });
+
+                const disabledButtons = new ActionRowBuilder()
+                    .addComponents(
+                        interaction.message.components[0].components.map(btn => 
+                            ButtonBuilder.from(btn).setDisabled(true)
+                        )
+                    );
+
+                await interaction.update({
+                    embeds: [updatedEmbed],
+                    components: [disabledButtons]
+                });
+
+                // Send log message in Romanian
+                const logsChannel = await client.channels.fetch(invoireLogsChannelId);
+                await logsChannel.send({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setTitle('✅ INVOIRE APROBATA')
+                            .setColor('Green')
+                            .setDescription(`📢 Supervizorul ${interaction.user.tag} a ACCEPTAT Invoirea lui <@${userId}>!`)
+                            .addFields(
+                                { name: '🆔 ID Cerere', value: `#${requestId}` },
+                                { name: '👤 Membrul', value: `<@${userId}>` },
+                                { name: '🛡️ Aprobata de', value: interaction.user.tag }
+                            )
+                            .setTimestamp()
+                    ]
+                });
+
+                return interaction.reply({
+                    content: `✅ Cererea #${requestId} a fost APROBATA de ${interaction.user.tag}`,
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+
+            if (interaction.customId.startsWith('invoire_reject_')) {
+
+                const hasPermission = interaction.member.roles.cache.has(invoirePermissionRoleId);
+
+                if (!hasPermission) {
+                    return interaction.reply({
+                        content: '❌ Nu ai permisiune sa respingi cereri de concediu.',
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+
+                const requestId = parseInt(interaction.customId.split('_')[2]);
+                let found = false;
+                let userId = null;
+
+                leaveRequests.forEach((requests, uId) => {
+                    const request = requests.find(req => req.id === requestId);
+                    if (request && request.status === 'PENDING') {
+                        found = true;
+                        userId = uId;
+                        request.status = 'REJECTED';
+                        request.rejectedBy = interaction.user.tag;
+
+                        const historyEntry = { ...request };
+                        if (!leaveHistory.has(uId)) {
+                            leaveHistory.set(uId, []);
+                        }
+                        leaveHistory.get(uId).push(historyEntry);
+                    }
+                });
+
+                if (!found) {
+                    return interaction.reply({
+                        content: '❌ Cererea nu a fost gasita sau a fost deja procesata.',
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+
+                const updatedEmbed = EmbedBuilder.from(interaction.message.embeds[0])
+                    .setColor('Red')
+                    .spliceFields(6, 1, { name: '📌 Status', value: '❌ REJECTED' });
+
+                const disabledButtons = new ActionRowBuilder()
+                    .addComponents(
+                        interaction.message.components[0].components.map(btn => 
+                            ButtonBuilder.from(btn).setDisabled(true)
+                        )
+                    );
+
+                await interaction.update({
+                    embeds: [updatedEmbed],
+                    components: [disabledButtons]
+                });
+
+                // Send log message in Romanian
+                const logsChannel = await client.channels.fetch(invoireLogsChannelId);
+                await logsChannel.send({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setTitle('❌ INVOIRE RESPINSA')
+                            .setColor('Red')
+                            .setDescription(`📢 Supervizorul ${interaction.user.tag} a RESPINS Invoirea lui <@${userId}>!`)
+                            .addFields(
+                                { name: '🆔 ID Cerere', value: `#${requestId}` },
+                                { name: '👤 Membrul', value: `<@${userId}>` },
+                                { name: '🛡️ Respinsa de', value: interaction.user.tag }
+                            )
+                            .setTimestamp()
+                    ]
+                });
+
+                return interaction.reply({
+                    content: `✅ Cererea #${requestId} a fost RESPINSA de ${interaction.user.tag}`,
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+
+            // =====================================================
             // CV BUTTONS
             // =====================================================
 
             const embed = interaction.message.embeds[0];
+
+            if (!embed || !embed.footer || !embed.footer.text.includes('USER ID')) {
+                return;
+            }
 
             const userId = embed.footer.text.replace(
                 'USER ID: ',
@@ -1257,49 +1762,6 @@ client.on(Events.MessageCreate, async message => {
         console.error(err);
     }
 });
-
-// ================= ACTIVITATE =================
-
-if (interaction.customId === 'stop_activity') {
-
-    const data = activeActivities.get(interaction.message.id);
-
-    if (!data) {
-        return interaction.reply({
-            content: '❌ Activitate inexistentă.',
-            flags: MessageFlags.Ephemeral
-        });
-    }
-
-    const endTime = Date.now();
-    const duration = endTime - data.startTime;
-
-    const embed = EmbedBuilder.from(interaction.message.embeds[0]);
-
-    embed.setColor('Red');
-
-    embed.spliceFields(0, embed.data.fields.length,
-        { name: '👮 Startat de', value: `<@${data.startedBy}>` },
-        { name: '🎯 Tip activitate', value: data.tip },
-        { name: '🕒 Început la', value: `<t:${Math.floor(data.startTime / 1000)}:t>` },
-        { name: '🕓 Oprit la', value: `<t:${Math.floor(endTime / 1000)}:t>` },
-        { name: '⏱️ Durată', value: `${Math.floor(duration / 60000)} min` },
-        { name: '🔴 Status', value: 'FINALIZAT' }
-    );
-
-    await interaction.message.edit({
-        embeds: [embed],
-        components: []
-    });
-
-    activeActivities.delete(interaction.message.id);
-
-    return interaction.reply({
-        content: '✔ Activitate oprită cu succes.',
-        flags: MessageFlags.Ephemeral
-    });
-}
-
 
 // ================= LOGIN =================
 
