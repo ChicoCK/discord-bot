@@ -66,20 +66,6 @@ client.once(Events.ClientReady, async () => {
     console.log(`🤖 Bot pornit ca ${client.user.tag}`);
 
     const commands = [
-
-        // ================= ACTIVITATE =================
-
-        new SlashCommandBuilder()
-.setName('activitate')
-.setDescription('Sistem activitate RP')
-.addSubcommand(sub =>
-    sub.setName('start')
-    .addStringOption(opt =>
-        opt.setName('tip')
-        .setDescription('Tip activitate')
-        .setRequired(true)
-    )
-)
         
         // ================= CV =================
 
@@ -297,6 +283,31 @@ client.once(Events.ClientReady, async () => {
         console.error(err);
     }
 });
+
+        // ================= ACTIVITATE =================
+
+    new SlashCommandBuilder()
+        .setName('cv')
+        .setDescription('Completeaza CV-ul'),
+
+    new SlashCommandBuilder()
+        .setName('task')
+        .setDescription('Creaza un task')
+        ...
+
+    // 👇 AICI TREBUIE sa fie activitate
+    new SlashCommandBuilder()
+        .setName('activitate')
+        .setDescription('Sistem activitate RP')
+        .addSubcommand(sub =>
+            sub.setName('start')
+            .addStringOption(opt =>
+                opt.setName('tip')
+                .setRequired(true)
+            )
+        )
+
+].map(cmd => cmd.toJSON());
 
 // ================= ERRORS =================
 
