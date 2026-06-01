@@ -86,41 +86,40 @@ client.once(Events.ClientReady, async () => {
            // ================= DOSAR =================
 
 new SlashCommandBuilder()
-    .setName('activity')
-    .setDescription('Sistem activitati dosar RP')
-    .addSubcommand(cmd =>
-        cmd.setName('start')
-            .setDescription('Start activitate')
-    )
-    .addSubcommand(cmd =>
-        cmd.setName('add')
-            .setDescription('Adauga activitate')
-            .addStringOption(opt =>
-                opt.setName('id')
-                    .setDescription('ID activitate')
-                    .setRequired(true)
-            )
-            .addStringOption(opt =>
-                opt.setName('tip')
-                    .setDescription('Tip activitate (Patrula, Braconier etc)')
-                    .setRequired(true)
-
-                             .addStringOption(opt =>
-    opt.setName('tip')
-        .setDescription('legal / ilegal / mixt')
-        .setRequired(true)
-                     activity.classification = interaction.options.getString('tip');        
-            )
-    )
-    .addSubcommand(cmd =>
-        cmd.setName('stop')
-            .setDescription('Opreste activitatea')
-            .addStringOption(opt =>
-                opt.setName('id')
-                    .setDescription('ID activitate')
-                    .setRequired(true)
-            )
-    ),
+.setName('activity')
+.setDescription('Sistem activitati dosar RP')
+.addSubcommand(cmd =>
+    cmd.setName('start')
+        .setDescription('Start activitate')
+)
+.addSubcommand(cmd =>
+    cmd.setName('add')
+        .setDescription('Adauga activitate')
+        .addStringOption(opt =>
+            opt.setName('id')
+                .setDescription('ID activitate')
+                .setRequired(true)
+        )
+        .addStringOption(opt =>
+            opt.setName('tip')
+                .setDescription('Tip activitate (Patrula, Braconier etc)')
+                .setRequired(true)
+        )
+        .addStringOption(opt =>
+            opt.setName('clasificare')
+                .setDescription('legal / ilegal / mixt')
+                .setRequired(true)
+        )
+)
+.addSubcommand(cmd =>
+    cmd.setName('stop')
+        .setDescription('Opreste activitatea')
+        .addStringOption(opt =>
+            opt.setName('id')
+                .setDescription('ID activitate')
+                .setRequired(true)
+        )
+),
         
         // ================= CV =================
 
@@ -515,8 +514,6 @@ const collected = await interaction.channel.awaitMessages({
     time: 15000
 });
 
-const img = collected.first()?.attachments.first();
-
 if (!img) {
     return interaction.followUp({
         content: '❌ Activitate anulată - lipsă poză.'
@@ -598,7 +595,7 @@ activity.logs.forEach((l, i) => {
 });
 
 const embed = new EmbedBuilder()
-.setTitle('📋 DOSAR ACTIVITATE RP')
+.setTitle('📋 DOSAR ACTIVITATE ')
 .setColor('Blue')
 .addFields(
     { name: '🆔 ID', value: id },
@@ -609,7 +606,6 @@ const embed = new EmbedBuilder()
     { name: '🏷 Clasificare', value: activity.classification || 'NESETAT' }
 )
 .setTimestamp();
-        });
     }
 }
 
