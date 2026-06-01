@@ -483,66 +483,73 @@ if (interaction.commandName === 'activity') {
     const sub = interaction.options.getSubcommand();
 
     // ================= START =================
-    if (sub === 'start') {
+ if (sub === 'start') {
 
-        activityCounter++;
-        const id = `ACT-${activityCounter}`;
+    activityCounter++;
+    const id = `ACT-${activityCounter}`;
 
-        activities.set(id, {
-            leader: interaction.user.id,
-            channel: interaction.channel.id,
-            participants: [],
-            logs: [],
-            startTime: Date.now(),
-            status: 'OPEN',
-            classification: null,
-            reminderSent: false
-        });
+    const activity = {
+        leader: interaction.user.id,
+        channel: interaction.channel.id,
+        participants: [],
+        logs: [],
+        startTime: Date.now(),
+        status: 'OPEN',
+        classification: null,
+        reminderSent: false
+    };
 
-        await interaction.reply({
-            content: '📸 Trimite OBLIGATORIU o poză în chat (15 secunde)',
-            flags: MessageFlags.Ephemeral
-        });
+    activities.set(id, activity);
 
-       const filter = m =>
-    m.author.id === interaction.user.id &&
-    m.attachments.size > 0;
+    await interaction.reply({
+        content: `📸 Trimite OBLIGATORIU poza în următoarele 15 secunde pentru activitatea **${id}**`,
+        ephemeral: true
+    });
 
-let collected;
+    const filter = m =>
+        m.author.id === interaction.user.id &&
+        m.attachments.size > 0;
 
-try {
-    collected = await interaction.channel.awaitMessages({
+    const collector = interaction.channel.createMessageCollector({
         filter,
         max: 1,
-        time: 15000,
-        errors: ['time']
+        time: 15000
     });
-} catch (err) {
-    activities.delete(id);
 
-    return interaction.followUp({
-        content: '❌ Nu ai trimis poza la timp. Activitate anulată.'
+    collector.on('collect', async (msg) => {
+
+        const img = msg.attachments.first();
+
+        if (!img) return;
+
+        activity.logs.push({
+            type: 'START PROOF',
+            user: interaction.user.id,
+            photo: img.url,
+            time: Date.now()
+        });
+
+        await interaction.followUp({
+            content: '✅ Activitate pornită cu succes!',
+            ephemeral: true
+        });
+
     });
-}
 
-const msg = collected.first();
+    collector.on('end', async (collected) => {
 
-if (!msg) {
-    activities.delete(id);
+        if (collected.size === 0) {
 
-    return interaction.followUp({
-        content: '❌ Nu s-a detectat mesaj valid cu poză.'
+            activities.delete(id);
+
+            await interaction.followUp({
+                content: '❌ Nu ai trimis poza în 15 secunde. Activitatea a fost anulată.',
+                ephemeral: true
+            }).catch(() => {});
+        }
     });
-}
 
-const img = msg.attachments.first();
-
-if (!img) {
-    activities.delete(id);
-
-    return interaction.followUp({
-        content: '❌ Mesajul nu conține poză validă.'
-    });
+    return;
 }
 
         // ================= REMINDER SYSTEM =================
