@@ -48,6 +48,8 @@ const tasks = new Map();
 const warns = new Map();
 const amenzi = new Map();
 
+const activeActivities = new Map();
+
 // ================= CONFIG TASK =================
 
 const taskChannelId = '1494860985066848357';
@@ -65,6 +67,20 @@ client.once(Events.ClientReady, async () => {
 
     const commands = [
 
+        // ================= ACTIVITATE =================
+
+        new SlashCommandBuilder()
+.setName('activitate')
+.setDescription('Sistem activitate RP')
+.addSubcommand(sub =>
+    sub.setName('start')
+    .addStringOption(opt =>
+        opt.setName('tip')
+        .setDescription('Tip activitate')
+        .setRequired(true)
+    )
+)
+        
         // ================= CV =================
 
         new SlashCommandBuilder()
@@ -295,6 +311,51 @@ client.on(Events.InteractionCreate, async interaction => {
 
         if (interaction.isChatInputCommand()) {
 
+            // =====================================================
+            // /ACTIVITATE
+            // =====================================================
+
+if (interaction.commandName === 'activitate') {
+
+    const sub = interaction.options.getSubcommand();
+
+    if (sub === 'start') {
+
+        const tip = interaction.options.getString('tip');
+        const startTime = Date.now();
+
+        const embed = new EmbedBuilder()
+            .setColor('Green')
+            .setTitle('📁 ACTIVITATE RP - LIVE')
+            .addFields(
+                { name: '👮 Startat de', value: `<@${interaction.user.id}>` },
+                { name: '🎯 Tip activitate', value: tip },
+                { name: '🕒 Început la', value: `<t:${Math.floor(startTime / 1000)}:t>` },
+                { name: '⏳ Status', value: '🟢 ACTIVĂ' }
+            )
+            .setFooter({ text: 'OG LAND RP SYSTEM' });
+
+        const button = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('stop_activity')
+                .setLabel('⛔ Oprește Activitatea')
+                .setStyle(ButtonStyle.Danger)
+        );
+
+        const msg = await interaction.reply({
+            embeds: [embed],
+            components: [button],
+            fetchReply: true
+        });
+
+        activeActivities.set(msg.id, {
+            startTime,
+            tip,
+            startedBy: interaction.user.id
+        });
+    }
+}
+            
             // =====================================================
             // /CV
             // =====================================================
@@ -1185,6 +1246,49 @@ client.on(Events.MessageCreate, async message => {
         console.error(err);
     }
 });
+
+// ================= ACTIVITATE =================
+
+if (interaction.customId === 'stop_activity') {
+
+    const data = activeActivities.get(interaction.message.id);
+
+    if (!data) {
+        return interaction.reply({
+            content: '❌ Activitate inexistentă.',
+            flags: MessageFlags.Ephemeral
+        });
+    }
+
+    const endTime = Date.now();
+    const duration = endTime - data.startTime;
+
+    const embed = EmbedBuilder.from(interaction.message.embeds[0]);
+
+    embed.setColor('Red');
+
+    embed.spliceFields(0, embed.data.fields.length,
+        { name: '👮 Startat de', value: `<@${data.startedBy}>` },
+        { name: '🎯 Tip activitate', value: data.tip },
+        { name: '🕒 Început la', value: `<t:${Math.floor(data.startTime / 1000)}:t>` },
+        { name: '🕓 Oprit la', value: `<t:${Math.floor(endTime / 1000)}:t>` },
+        { name: '⏱️ Durată', value: `${Math.floor(duration / 60000)} min` },
+        { name: '🔴 Status', value: 'FINALIZAT' }
+    );
+
+    await interaction.message.edit({
+        embeds: [embed],
+        components: []
+    });
+
+    activeActivities.delete(interaction.message.id);
+
+    return interaction.reply({
+        content: '✔ Activitate oprită cu succes.',
+        flags: MessageFlags.Ephemeral
+    });
+}
+
 
 // ================= LOGIN =================
 
