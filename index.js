@@ -504,33 +504,46 @@ if (interaction.commandName === 'activity') {
             flags: MessageFlags.Ephemeral
         });
 
-        const filter = m =>
-            m.author.id === interaction.user.id &&
-            m.attachments.size > 0;
+       const filter = m =>
+    m.author.id === interaction.user.id &&
+    m.attachments.size > 0;
 
-        const collected = await interaction.channel.awaitMessages({
-            filter,
-            max: 1,
-            time: 15000
-        });
+let collected;
 
-        const img = collected.first()?.attachments.first();
+try {
+    collected = await interaction.channel.awaitMessages({
+        filter,
+        max: 1,
+        time: 15000,
+        errors: ['time']
+    });
+} catch (err) {
+    activities.delete(id);
 
-        if (!img) {
-            activities.delete(id);
+    return interaction.followUp({
+        content: '❌ Nu ai trimis poza la timp. Activitate anulată.'
+    });
+}
 
-            return interaction.followUp({
-                content: '❌ Activitate anulată - lipsă poză.'
-            });
-        }
+const msg = collected.first();
 
-        const activity = activities.get(id);
-        activity.logs.push({
-            type: 'START PROOF',
-            user: interaction.user.id,
-            photo: img.url,
-            time: Date.now()
-        });
+if (!msg) {
+    activities.delete(id);
+
+    return interaction.followUp({
+        content: '❌ Nu s-a detectat mesaj valid cu poză.'
+    });
+}
+
+const img = msg.attachments.first();
+
+if (!img) {
+    activities.delete(id);
+
+    return interaction.followUp({
+        content: '❌ Mesajul nu conține poză validă.'
+    });
+}
 
         // ================= REMINDER SYSTEM =================
 
