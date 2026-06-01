@@ -42,6 +42,26 @@ const client = new Client({
 
 // ================= STORAGE =================
 
+const fs = require('fs');
+
+const seifRoleId = '1503084616695681064';
+
+const seifChannelId = 'ID_CANAL_SEIF';
+const seifLogsChannelId = 'ID_CANAL_LOGS';
+
+let seif = {};
+
+try {
+
+    seif = JSON.parse(
+        fs.readFileSync('./seif.json', 'utf8')
+    );
+
+} catch {
+
+    seif = {};
+}
+
 const applications = new Map();
 const tasks = new Map();
 
@@ -106,6 +126,46 @@ function createSeifEmbed() {
         .setColor('Gold')
 
         .setDescription(text)
+
+        .setTimestamp();
+}
+
+function createSeifEmbed() {
+
+    let produseText = '';
+
+    const entries = Object.entries(seif);
+
+    if (entries.length === 0) {
+
+        produseText =
+            '*Nu există produse în seif.*';
+
+    } else {
+
+        for (const [produs, cantitate] of entries) {
+
+            produseText +=
+                `*📦 ${produs}* → **${cantitate}x**\n\n`;
+        }
+    }
+
+    return new EmbedBuilder()
+
+        .setColor('#00F4FF')
+
+        .setTitle('🏦 TSC SEIF')
+
+        .setDescription(
+            '> Inventarul oficial al familiei.\n\n' +
+            '━━━━━━━━━━━━━━━━\n\n' +
+            produseText +
+            '━━━━━━━━━━━━━━━━'
+        )
+
+        .setFooter({
+            text: 'TSC Management System'
+        })
 
         .setTimestamp();
 }
