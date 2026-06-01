@@ -53,6 +53,12 @@ const leaveHistory = new Map(); // leave request history
 
 const activities = new Map();
 let activityCounter = 0;
+
+const activities = new Map();
+
+// tracking reminder timers
+const activityTimers = new Map();
+
 // ================= CONFIG =================
 
 const taskChannelId = '1494860985066848357';
@@ -67,6 +73,8 @@ const leadershipRoleIds = [
     '1493768690133499926'
 ];
 
+const dosarChannelId = '1510810718662824047';
+const minRankRoleId = '1493795104950059139';
 // ================= READY =================
 
 client.once(Events.ClientReady, async () => {
@@ -96,6 +104,12 @@ new SlashCommandBuilder()
                 opt.setName('tip')
                     .setDescription('Tip activitate (Patrula, Braconier etc)')
                     .setRequired(true)
+
+                             .addStringOption(opt =>
+    opt.setName('tip')
+        .setDescription('legal / ilegal / mixt')
+        .setRequired(true)
+                     activity.classification = interaction.options.getString('tip');        
             )
     )
     .addSubcommand(cmd =>
@@ -474,31 +488,40 @@ if (interaction.commandName === 'activity') {
     // ================= START =================
     if (sub === 'start') {
 
-        activityCounter++;
-        const id = `ACT-${activityCounter}`;
+ activityCounter++;
+const id = `ACT-${activityCounter}`;
 
-        activities.set(id, {
-            leader: interaction.user.id,
-            channel: interaction.channel.id,
-            startTime: Date.now(),
-            status: 'OPEN',
-            logs: []
-        });
+activities.set(id, {
+    leader: interaction.user.id,
+    channel: interaction.channel.id,
+    participants: [],
+    logs: [],
+    startTime: Date.now(),
+    status: 'OPEN',
+    classification: null,
+    reminderSent: false
+});
 
-        const embed = new EmbedBuilder()
-            .setTitle('🟦 ACTIVITATE STARTED')
-            .setColor('Blue')
-            .addFields(
-                { name: '🆔 ID', value: id },
-                { name: '👮 Leader', value: `<@${interaction.user.id}>` },
-                { name: '📌 Status', value: 'OPEN' }
-            )
-            .setTimestamp();
+        await interaction.reply({
+    content: '📸 Trimite OBLIGATORIU o poză acum în chat (10 secunde)',
+    flags: MessageFlags.Ephemeral
+});
 
-        return interaction.reply({
-            embeds: [embed]
-        });
-    }
+        const filter = m => m.author.id === interaction.user.id && m.attachments.size > 0;
+
+const collected = await interaction.channel.awaitMessages({
+    filter,
+    max: 1,
+    time: 15000
+});
+
+const img = collected.first()?.attachments.first();
+
+if (!img) {
+    return interaction.followUp({
+        content: '❌ Activitate anulată - lipsă poză.'
+    });
+}
 
         if (sub === 'add') {
 
@@ -528,12 +551,16 @@ if (interaction.commandName === 'activity') {
                 flags: MessageFlags.Ephemeral
             });
 
-        activity.logs.push({
-            type: tip,
-            photo: img.url,
-            user: interaction.user.id,
-            time: Date.now()
-        });
+activity.logs.push({
+    type: tip,
+    user: interaction.user.id,
+    photo: img.url,
+    time: Date.now()
+});
+
+if (!activity.participants.includes(interaction.user.id)) {
+    activity.participants.push(interaction.user.id);
+}
 
         const embed = new EmbedBuilder()
             .setTitle('➕ ACTIVITATE ADAUGATĂ')
@@ -560,37 +587,75 @@ if (interaction.commandName === 'activity') {
                 flags: MessageFlags.Ephemeral
             });
 
-        activity.status = 'CLOSED';
-        activity.endTime = Date.now();
+activity.status = 'CLOSED';
+activity.endTime = Date.now();
 
-        const duration = Math.floor((activity.endTime - activity.startTime) / 60000);
+const duration = Math.floor((activity.endTime - activity.startTime) / 60000);
 
-        let text = '';
+let text = '';
+activity.logs.forEach((l, i) => {
+    text += `\n${i + 1}. ${l.type} - <@${l.user}>`;
+});
 
-        activity.logs.forEach((l, i) => {
-            text += `\n${i + 1}. ${l.type} - <@${l.user}>`;
-        });
-
-        const embed = new EmbedBuilder()
-            .setTitle('🟥 DOSAR ACTIVITATE FINALIZAT')
-            .setColor('Red')
-            .addFields(
-                { name: '🆔 ID', value: id },
-                { name: '⏱ Durată', value: `${duration} min` },
-                { name: '📊 Activități', value: text || 'Nimic' }
-            )
-            .setTimestamp();
-
-        const channel = await client.channels.fetch(taskLogsChannelId);
-
-        await channel.send({ embeds: [embed] });
-
-        return interaction.reply({
-            content: '✅ Activitate închisă și arhivată.',
-            flags: MessageFlags.Ephemeral
+const embed = new EmbedBuilder()
+.setTitle('📋 DOSAR ACTIVITATE RP')
+.setColor('Blue')
+.addFields(
+    { name: '🆔 ID', value: id },
+    { name: '👮 Leader', value: `<@${activity.leader}>` },
+    { name: '👥 Participanți', value: activity.participants.map(p => `<@${p}>`).join(', ') || 'Nimic' },
+    { name: '⏱ Durată', value: `${duration} min` },
+    { name: '📊 Activități', value: text || 'Nimic' },
+    { name: '🏷 Clasificare', value: activity.classification || 'NESETAT' }
+)
+.setTimestamp();
         });
     }
 }
+
+    const timer = setTimeout(async () => {
+
+    const activity = activities.get(id);
+    if (!activity || activity.status !== 'OPEN') return;
+
+    const user = await client.users.fetch(activity.leader);
+
+    const msg = await user.send(
+        `⏰ Ești încă la activitate ${id}? Răspunde cu YES în 5 minute sau se oprește automat.`
+    ).catch(() => null);
+
+    activityTimers.set(id, {
+        step: 'reminder1',
+        time: Date.now()
+    });
+
+    // WAIT 5 min răspuns
+    setTimeout(async () => {
+
+        const act = activities.get(id);
+        if (!act || act.status !== 'OPEN') return;
+
+        act.status = 'AUTO-CLOSED';
+        act.endTime = Date.now();
+
+        const logChannel = await client.channels.fetch(dosarChannelId);
+
+        await logChannel.send({
+            embeds: [
+                new EmbedBuilder()
+                    .setTitle('⛔ ACTIVITATE AUTO-INCHISA')
+                    .setColor('Red')
+                    .addFields(
+                        { name: '🆔 ID', value: id },
+                        { name: '👮 Leader', value: `<@${activity.leader}>` },
+                        { name: '📌 Motiv', value: 'Fără răspuns la reminder' }
+                    )
+            ]
+        });
+
+    }, 5 * 60 * 1000);
+
+}, 30 * 60 * 1000); // 30 min initial reminder
             
             // =====================================================
             // /CV
