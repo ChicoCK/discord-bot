@@ -530,9 +530,9 @@ async function sendDailyReport() {
 
                 dossier.participanti.forEach(p => uniqueParticipants.add(p));
 
-                const startTime = new Date(dossier.dataSfarsit + 'T' + dossier.oraSfarsit);
-                const endTime = new Date(dossier.dataSfarsit + 'T' + dossier.oraInceput);
-                const duration = (startTime - endTime) / (1000 * 60);
+                const startTime = new Date(dossier.dataInceput + 'T' + dossier.oraInceput);
+                const endTime = new Date(dossier.dataSfarsit + 'T' + dossier.oraSfarsit);
+                const duration = (endTime - startTime) / (1000 * 60);
                 totalDuration += duration;
 
                 if (!activityTypeBreakdown[dossier.tipActivitate]) {
@@ -1554,32 +1554,30 @@ client.on(Events.InteractionCreate, async interaction => {
 
                 if (sub === 'start') {
 
-                    const legalSelect = new SelectMenuBuilder()
-                        .setCustomId('dosar_type_legal')
-                        .setPlaceholder('Alege tip activitate legala')
+                    // Create a SINGLE dropdown with both legal and illegal options
+                    const combinedSelect = new SelectMenuBuilder()
+                        .setCustomId('dosar_type_combined')
+                        .setPlaceholder('Alege tip activitate')
                         .addOptions(
+                            // Add LEGAL options
                             activityTypes.LEGAL.types.map(type => ({
-                                label: type,
-                                value: `legal_${type}`
-                            }))
-                        );
-
-                    const illegalSelect = new SelectMenuBuilder()
-                        .setCustomId('dosar_type_illegal')
-                        .setPlaceholder('Alege tip activitate ilegala')
-                        .addOptions(
+                                label: `${type} (Legală)`,
+                                value: `legal_${type}`,
+                                description: 'Activitate legală'
+                            })),
+                            // Add ILLEGAL options
                             activityTypes.ILLEGAL.types.map(type => ({
-                                label: type,
-                                value: `illegal_${type}`
+                                label: `${type} (Ilegală)`,
+                                value: `illegal_${type}`,
+                                description: 'Activitate ilegală'
                             }))
                         );
 
-                    const row1 = new ActionRowBuilder().addComponents(legalSelect);
-                    const row2 = new ActionRowBuilder().addComponents(illegalSelect);
+                    const row = new ActionRowBuilder().addComponents(combinedSelect);
 
                     return interaction.reply({
                         content: '📁 Selecteaza tipul activității:',
-                        components: [row1, row2],
+                        components: [row],
                         flags: MessageFlags.Ephemeral
                     });
                 }
@@ -1776,51 +1774,19 @@ client.on(Events.InteractionCreate, async interaction => {
 
         if (interaction.isStringSelectMenu()) {
 
-            if (interaction.customId === 'dosar_type_legal') {
+            // Handle the COMBINED dropdown (both legal and illegal)
+            if (interaction.customId === 'dosar_type_combined') {
 
-                const selectedType = interaction.values[0].replace('legal_', '');
-
-                await interaction.deferUpdate();
-
-                const modal = new ModalBuilder()
-                    .setCustomId(`dosar_modal_legal_${selectedType}`)
-                    .setTitle('📋 Creeaza Activitate - ' + selectedType);
-
-                const participantsInput = new TextInputBuilder()
-                    .setCustomId('participants')
-                    .setLabel('Menționa participanți (ex: @user1 @user2)')
-                    .setStyle(TextInputStyle.Paragraph)
-                    .setRequired(true);
-
-                const observatiiInput = new TextInputBuilder()
-                    .setCustomId('observatii')
-                    .setLabel('Observații (opțional)')
-                    .setStyle(TextInputStyle.Paragraph)
-                    .setRequired(false);
-
-                const bodycamInput = new TextInputBuilder()
-                    .setCustomId('bodycam')
-                    .setLabel('Link Bodycam (opțional)')
-                    .setStyle(TextInputStyle.Short)
-                    .setRequired(false);
-
-                modal.addComponents(
-                    new ActionRowBuilder().addComponents(participantsInput),
-                    new ActionRowBuilder().addComponents(observatiiInput),
-                    new ActionRowBuilder().addComponents(bodycamInput)
-                );
-
-                return await interaction.showModal(modal);
-            }
-
-            if (interaction.customId === 'dosar_type_illegal') {
-
-                const selectedType = interaction.values[0].replace('illegal_', '');
+                const selectedValue = interaction.values[0];
+                const isLegal = selectedValue.startsWith('legal_');
+                const selectedType = isLegal
+                    ? selectedValue.replace('legal_', '')
+                    : selectedValue.replace('illegal_', '');
 
                 await interaction.deferUpdate();
 
                 const modal = new ModalBuilder()
-                    .setCustomId(`dosar_modal_illegal_${selectedType}`)
+                    .setCustomId(`dosar_modal_combined_${isLegal ? 'legal' : 'illegal'}_${selectedType}`)
                     .setTitle('📋 Creeaza Activitate - ' + selectedType);
 
                 const participantsInput = new TextInputBuilder()
@@ -1882,12 +1848,11 @@ client.on(Events.InteractionCreate, async interaction => {
 
             // ================= DOSAR MODALS =================
 
-            if (interaction.customId.startsWith('dosar_modal_legal_') || interaction.customId.startsWith('dosar_modal_illegal_')) {
+            if (interaction.customId.startsWith('dosar_modal_combined_')) {
 
-                const isLegal = interaction.customId.startsWith('dosar_modal_legal_');
-                const activityType = isLegal
-                    ? interaction.customId.replace('dosar_modal_legal_', '')
-                    : interaction.customId.replace('dosar_modal_illegal_', '');
+                const parts = interaction.customId.split('_');
+                const isLegal = parts[3] === 'legal';
+                const selectedType = parts.slice(4).join('_');
 
                 const participantsText = interaction.fields.getTextInputValue('participants');
                 const observatii = interaction.fields.getTextInputValue('observatii') || '';
@@ -1916,6 +1881,16 @@ client.on(Events.InteractionCreate, async interaction => {
                         flags: MessageFlags.Ephemeral
                     });
                 }
+
+                // Store the dossier data temporarily
+                applications.set(interaction.user.id, {
+                    tipActivitate: selectedType,
+                    categorie: isLegal ? 'Legală' : 'Ilegală',
+                    participanti: participantIds,
+                    observatii: observatii,
+                    bodycamUrl: bodycamUrl,
+                    waiting_for_dosar_image: true
+                });
 
                 return interaction.reply({
                     content: '📸 Acum trimite poza activității (obligatoriu).',
