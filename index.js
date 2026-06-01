@@ -1,5 +1,7 @@
 require('dotenv').config();
 
+const mongoose = require('mongoose');
+
 const {
     Client,
     GatewayIntentBits,
@@ -26,6 +28,7 @@ const {
 } = require('./config.json');
 
 const token = process.env.DISCORD_TOKEN;
+const MONGODB_URI = process.env.MONGODB_URI;
 
 const client = new Client({
 
@@ -59,17 +62,292 @@ const invoireChannelId = '1493771851485417532'; // Invoire channel where request
 const invoireLogsChannelId = '1510636374812790865'; // Logs channel for accept/decline actions
 const invoirePermissionRoleId = '1504935162092195930'; // Permission role for buttons
 
+const dosarChannelId = '1510810718662824047';
+const dosarRunnerRoleId = '1493795104950059139';
+
 let leaveRequestIdCounter = 0;
+let dosarIdCounter = 0;
 
 const leadershipRoleIds = [
     '1493768690133499926'
 ];
+
+// ================= DOSSIER CONSTANTS =================
+
+const AKTIVITATI_LEGALE = [
+    'Patrulă',
+    'Jointuri',
+    'Topitorie',
+    'Minereu',
+    'Fier',
+    'Elemente de fixare',
+    'Mecanisme',
+    'Țeavă',
+    'Cadru'
+];
+
+const AKTIVITATI_ILEGALE = [
+    'Procesare Coca',
+    'Procesare Crack',
+    'Braconier'
+];
+
+const activeDosarReminders = new Map(); // Track reminder timers
+
+// ================= MONGODB SCHEMA =================
+
+const dosarSchema = new mongoose.Schema({
+    dosarId: { type: String, unique: true, required: true },
+    creatorId: { type: String, required: true },
+    participantsIds: [String],
+    tipActivitate: { type: String, required: true },
+    categorie: { type: String, required: true },
+    imagine: { type: String },
+    bodycam: { type: String },
+    observatii: { type: String },
+    status: { type: String, default: 'Activ' },
+    dataInceput: { type: Date, required: true },
+    dataFinal: { type: Date },
+    motivaInchidere: { type: String },
+    messageId: { type: String },
+    channelId: { type: String },
+    reminderSent: { type: Boolean, default: false },
+    createdAt: { type: Date, default: Date.now }
+});
+
+const Dosar = mongoose.model('Dosar', dosarSchema);
+
+// ================= MONGODB CONNECTION =================
+
+async function connectMongoDB() {
+    try {
+        await mongoose.connect(MONGODB_URI);
+        console.log('✅ MongoDB conectat');
+    } catch (err) {
+        console.error('❌ Eroare conexiune MongoDB:', err);
+    }
+}
+
+// ================= HELPER FUNCTIONS =================
+
+function getCategorie(tipActivitate) {
+    if (AKTIVITATI_LEGALE.includes(tipActivitate)) return 'Legală';
+    if (AKTIVITATI_ILEGALE.includes(tipActivitate)) return 'Ilegală';
+    return 'Necunoscută';
+}
+
+function getDuration(startDate, endDate) {
+    const diff = endDate - startDate;
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    return `${hours}h ${minutes}m`;
+}
+
+async function createDosarEmbed(dosar, participantsData) {
+    const duration = dosar.dataFinal 
+        ? getDuration(new Date(dosar.dataInceput), new Date(dosar.dataFinal))
+        : getDuration(new Date(dosar.dataInceput), new Date());
+
+    const statusEmoji = dosar.status === 'Activ' ? '🟢' 
+        : dosar.status === 'Finalizat' ? '🔴' 
+        : '⚫';
+
+    const participantsText = participantsData
+        .map(p => `• ${p}`)
+        .join('\n');
+
+    const embed = new EmbedBuilder()
+        .setTitle(`📁 DOSAR ACTIVITATE #${dosar.dosarId}`)
+        .setColor(dosar.status === 'Activ' ? 'Green' : dosar.status === 'Finalizat' ? 'Red' : 'DarkGrey')
+        .addFields(
+            { name: 'Status', value: `${statusEmoji} ${dosar.status}`, inline: true },
+            { name: 'Tip activitate', value: dosar.tipActivitate, inline: true },
+            { name: 'Categorie', value: getCategorie(dosar.tipActivitate), inline: true },
+            { name: 'Creator', value: `<@${dosar.creatorId}>`, inline: true },
+            { name: 'Număr participanți', value: `${dosar.participantsIds.length}`, inline: true },
+            { name: '📅 Data începerii', value: new Date(dosar.dataInceput).toLocaleDateString('ro-RO'), inline: true },
+            { name: '⏰ Ora începerii', value: new Date(dosar.dataInceput).toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' }), inline: true },
+            { name: '⏱️ Durată', value: duration, inline: true }
+        );
+
+    if (dosar.bodycam) {
+        embed.addFields({ name: '📹 Bodycam', value: `[Link](${dosar.bodycam})`, inline: true });
+    }
+
+    if (dosar.observatii) {
+        embed.addFields({ name: '📝 Observații', value: dosar.observatii, inline: false });
+    }
+
+    embed.addFields({ name: 'Participanți', value: participantsText || 'Niciun participant', inline: false });
+
+    if (dosar.motivaInchidere) {
+        embed.addFields({ name: '⛔ Motiv Închidere', value: dosar.motivaInchidere, inline: false });
+    }
+
+    if (dosar.imagine) {
+        embed.setImage(dosar.imagine);
+    }
+
+    embed.setFooter({ text: 'Sistem Automat de Evidență Activități RP' });
+    embed.setTimestamp();
+
+    return embed;
+}
+
+async function updateDosarMessage(dosar) {
+    try {
+        const channel = await client.channels.fetch(dosar.channelId || dosarChannelId);
+        const message = await channel.messages.fetch(dosar.messageId);
+        
+        const participants = dosar.participantsIds.map(id => `<@${id}>`);
+        const embed = await createDosarEmbed(dosar, participants);
+        
+        await message.edit({ embeds: [embed] });
+    } catch (err) {
+        console.error('Eroare actualizare mesaj dosar:', err);
+    }
+}
+
+async function sendReminderDM(dosar) {
+    try {
+        const creator = await client.users.fetch(dosar.creatorId);
+        
+        const buttons = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`reminder_continue_${dosar.dosarId}`)
+                    .setLabel('✅ Da, continuăm')
+                    .setStyle(ButtonStyle.Success),
+                new ButtonBuilder()
+                    .setCustomId(`reminder_close_${dosar.dosarId}`)
+                    .setLabel('🛑 Închide')
+                    .setStyle(ButtonStyle.Danger)
+            );
+
+        const embed = new EmbedBuilder()
+            .setTitle('⏰ Reminder Activitate')
+            .setColor('Yellow')
+            .setDescription('Activitatea ta este încă deschisă. Mai participați la această activitate?')
+            .addFields(
+                { name: '🆔 ID Dosar', value: `#${dosar.dosarId}` },
+                { name: '📋 Tip Activitate', value: dosar.tipActivitate }
+            )
+            .setTimestamp();
+
+        await creator.send({ embeds: [embed], components: [buttons] });
+
+        dosar.reminderSent = true;
+        await dosar.save();
+
+        // Auto-close after 10 minutes if no response
+        const autoCloseTimeout = setTimeout(async () => {
+            try {
+                const updatedDosar = await Dosar.findOne({ dosarId: dosar.dosarId });
+                if (updatedDosar && updatedDosar.status === 'Activ' && updatedDosar.reminderSent) {
+                    updatedDosar.status = 'Închis automat';
+                    updatedDosar.dataFinal = new Date();
+                    updatedDosar.motivaInchidere = 'Nu s-a răspuns la verificarea activității.';
+                    await updatedDosar.save();
+
+                    await updateDosarMessage(updatedDosar);
+                }
+            } catch (err) {
+                console.error('Eroare auto-close dosar:', err);
+            }
+        }, 10 * 60 * 1000); // 10 minutes
+
+        activeDosarReminders.set(dosar.dosarId, autoCloseTimeout);
+
+    } catch (err) {
+        console.error('Eroare trimitere reminder:', err);
+    }
+}
+
+function startDailyReportChecker() {
+    setInterval(async () => {
+        const now = new Date();
+        
+        if (now.getHours() === 0 && now.getMinutes() === 0) {
+            await sendDailyReport();
+        }
+    }, 60 * 1000);
+}
+
+async function sendDailyReport() {
+    try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
+        const dosars = await Dosar.find({
+            dataInceput: { $gte: today, $lt: tomorrow }
+        });
+
+        if (dosars.length === 0) return;
+
+        const legalCount = dosars.filter(d => getCategorie(d.tipActivitate) === 'Legală').length;
+        const illegalCount = dosars.filter(d => getCategorie(d.tipActivitate) === 'Ilegală').length;
+
+        const uniqueParticipants = new Set();
+        dosars.forEach(d => {
+            d.participantsIds.forEach(id => uniqueParticipants.add(id));
+        });
+
+        let totalDurationMs = 0;
+        dosars.forEach(d => {
+            const endDate = d.dataFinal || new Date();
+            totalDurationMs += endDate - new Date(d.dataInceput);
+        });
+
+        const totalHours = Math.floor(totalDurationMs / (1000 * 60 * 60));
+        const totalMinutes = Math.floor((totalDurationMs % (1000 * 60 * 60)) / (1000 * 60));
+
+        const statsMap = {};
+        dosars.forEach(d => {
+            if (!statsMap[d.tipActivitate]) {
+                statsMap[d.tipActivitate] = 0;
+            }
+            statsMap[d.tipActivitate]++;
+        });
+
+        let breakdown = '';
+        Object.entries(statsMap).forEach(([activity, count]) => {
+            breakdown += `• ${activity}: ${count}\n`;
+        });
+
+        const embed = new EmbedBuilder()
+            .setTitle('📊 RAPORT ZILNIC')
+            .setColor('Gold')
+            .addFields(
+                { name: '📅 Data', value: today.toLocaleDateString('ro-RO'), inline: true },
+                { name: '📈 Total activități', value: `${dosars.length}`, inline: true },
+                { name: '✅ Legale', value: `${legalCount}`, inline: true },
+                { name: '⛔ Ilegale', value: `${illegalCount}`, inline: true },
+                { name: '👥 Participanți unici', value: `${uniqueParticipants.size}`, inline: true },
+                { name: '⏱️ Durată totală', value: `${totalHours}h ${totalMinutes}m`, inline: true },
+                { name: '📝 Defalcare', value: breakdown || 'Nicio activitate' }
+            )
+            .setFooter({ text: 'Sistem Automat de Evidență Activități RP' })
+            .setTimestamp();
+
+        const channel = await client.channels.fetch(dosarChannelId);
+        await channel.send({ embeds: [embed] });
+
+    } catch (err) {
+        console.error('Eroare raport zilnic:', err);
+    }
+}
 
 // ================= READY =================
 
 client.once(Events.ClientReady, async () => {
 
     console.log(`🤖 Bot pornit ca ${client.user.tag}`);
+
+    // Connect to MongoDB
+    await connectMongoDB();
 
     const commands = [
 
@@ -318,6 +596,62 @@ client.once(Events.ClientReady, async () => {
                             .setDescription('Membrul')
                             .setRequired(true)
                     )
+            ),
+
+        // ================= DOSAR =================
+
+        new SlashCommandBuilder()
+            .setName('dosar')
+            .setDescription('Sistem de evidență activități RP')
+            .addSubcommand(cmd =>
+                cmd.setName('start')
+                    .setDescription('Porneste o noua activitate')
+                    .addStringOption(opt =>
+                        opt.setName('tip')
+                            .setDescription('Tip de activitate')
+                            .setRequired(true)
+                            .addChoices(
+                                ...AKTIVITATI_LEGALE.map(a => ({ name: a, value: a })),
+                                ...AKTIVITATI_ILEGALE.map(a => ({ name: a, value: a }))
+                            )
+                    )
+                    .addStringOption(opt =>
+                        opt.setName('participanti')
+                            .setDescription('Participanți separati prin virgulă (ex: @user1, @user2)')
+                            .setRequired(true)
+                    )
+            )
+            .addSubcommand(cmd =>
+                cmd.setName('stop')
+                    .setDescription('Inchide o activitate')
+                    .addStringOption(opt =>
+                        opt.setName('id')
+                            .setDescription('ID-ul dosarului')
+                            .setRequired(true)
+                    )
+            )
+            .addSubcommand(cmd =>
+                cmd.setName('cauta-ora')
+                    .setDescription('Cauta activitati la o anumita data si ora')
+                    .addStringOption(opt =>
+                        opt.setName('data')
+                            .setDescription('Data (DD-MM-YYYY)')
+                            .setRequired(true)
+                    )
+                    .addStringOption(opt =>
+                        opt.setName('ora')
+                            .setDescription('Ora (HH:MM)')
+                            .setRequired(true)
+                    )
+            )
+            .addSubcommand(cmd =>
+                cmd.setName('membru')
+                    .setDescription('Statistici pentru un membru')
+                    .addUserOption(opt =>
+                        opt.setName('utilizator')
+                            .setDescription('Utilizatorul')
+                            .setRequired(true)
+                    )
             )
 
     ].map(cmd => cmd.toJSON());
@@ -349,6 +683,9 @@ client.once(Events.ClientReady, async () => {
 
     // Start expiration checker
     startExpirationChecker();
+    
+    // Start daily report checker
+    startDailyReportChecker();
 });
 
 // ================= ERRORS =================
@@ -1316,10 +1653,260 @@ client.on(Events.InteractionCreate, async interaction => {
                     });
                 }
             }
+
+            // =====================================================
+            // /DOSAR
+            // =====================================================
+
+            if (interaction.commandName === 'dosar') {
+                const sub = interaction.options.getSubcommand();
+
+                // Check Runner Role
+                const hasRunnerRole = interaction.member.roles.cache.has(dosarRunnerRoleId);
+                if (!hasRunnerRole) {
+                    return interaction.reply({
+                        content: '❌ Nu ai permisiune. Doar Runner și grade superioare pot folosi aceasta comanda.',
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+
+                // ================= DOSAR START =================
+                if (sub === 'start') {
+                    try {
+                        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+                        const tipActivitate = interaction.options.getString('tip');
+                        const participantiString = interaction.options.getString('participanti');
+
+                        // Parse participants
+                        const mentions = participantiString.match(/<@!?(\d+)>/g) || [];
+                        const participantsIds = mentions.map(m => m.replace(/[<@!>]/g, ''));
+
+                        if (participantsIds.length === 0) {
+                            return await interaction.editReply({
+                                content: '❌ Trebuie sa adaugi cel putin un participant. Foloseste @mentions.'
+                            });
+                        }
+
+                        // Check for overlapping dossiers
+                        const activeDosarsDB = await Dosar.find({ status: 'Activ' });
+                        for (const participant of participantsIds) {
+                            const overlap = activeDosarsDB.some(d => d.participantsIds.includes(participant));
+                            if (overlap) {
+                                return await interaction.editReply({
+                                    content: `❌ Utilizatorul <@${participant}> participă deja la o activitate activă.`
+                                });
+                            }
+                        }
+
+                        // Show modal for additional info
+                        const modal = new ModalBuilder()
+                            .setCustomId(`dosar_start_modal_${Date.now()}`)
+                            .setTitle('📁 Creare Dosar Activitate');
+
+                        const bodycamInput = new TextInputBuilder()
+                            .setCustomId('bodycam')
+                            .setLabel('Link Bodycam (opțional)')
+                            .setStyle(TextInputStyle.Short)
+                            .setRequired(false);
+
+                        const observatiiInput = new TextInputBuilder()
+                            .setCustomId('observatii')
+                            .setLabel('Observații (opțional)')
+                            .setStyle(TextInputStyle.Paragraph)
+                            .setRequired(false);
+
+                        modal.addComponents(
+                            new ActionRowBuilder().addComponents(bodycamInput),
+                            new ActionRowBuilder().addComponents(observatiiInput)
+                        );
+
+                        // Store data temporarily
+                        activeDosars.set(interaction.user.id, {
+                            tipActivitate,
+                            participantsIds,
+                            creatorId: interaction.user.id
+                        });
+
+                        return await interaction.showModal(modal);
+
+                    } catch (err) {
+                        console.error('Eroare dosar start:', err);
+                        await interaction.editReply({ content: '❌ Eroare la crearea dosarului.' });
+                    }
+                }
+
+                // ================= DOSAR STOP =================
+                if (sub === 'stop') {
+                    try {
+                        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+                        const dosarId = interaction.options.getString('id');
+                        const dosar = await Dosar.findOne({ dosarId });
+
+                        if (!dosar) {
+                            return await interaction.editReply({ content: '❌ Dosarul nu a fost găsit.' });
+                        }
+
+                        if (dosar.status !== 'Activ') {
+                            return await interaction.editReply({ content: '❌ Doar dosarele active pot fi închise.' });
+                        }
+
+                        const isCreator = dosar.creatorId === interaction.user.id;
+                        const isLeadership = interaction.member.roles.cache.some(role =>
+                            leadershipRoleIds.includes(role.id)
+                        );
+
+                        if (!isCreator && !isLeadership) {
+                            return await interaction.editReply({ content: '❌ Doar creatorul sau grade superioare pot inchide dosarul.' });
+                        }
+
+                        dosar.status = 'Finalizat';
+                        dosar.dataFinal = new Date();
+                        await dosar.save();
+
+                        // Clear reminder timeout if exists
+                        if (activeDosarReminders.has(dosar.dosarId)) {
+                            clearTimeout(activeDosarReminders.get(dosar.dosarId));
+                            activeDosarReminders.delete(dosar.dosarId);
+                        }
+
+                        await updateDosarMessage(dosar);
+
+                        await interaction.editReply({ 
+                            content: `✅ Dosarul #${dosarId} a fost finalizat.`
+                        });
+
+                    } catch (err) {
+                        console.error('Eroare dosar stop:', err);
+                        await interaction.editReply({ content: '❌ Eroare la inchiderea dosarului.' });
+                    }
+                }
+
+                // ================= DOSAR CAUTA-ORA =================
+                if (sub === 'cauta-ora') {
+                    try {
+                        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+                        const dataStr = interaction.options.getString('data');
+                        const oraStr = interaction.options.getString('ora');
+
+                        const [day, month, year] = dataStr.split('-');
+                        const [hour, minute] = oraStr.split(':');
+
+                        const searchDate = new Date(year, month - 1, day, hour, minute);
+                        const startOfDay = new Date(year, month - 1, day, 0, 0);
+                        const endOfDay = new Date(year, month - 1, day, 23, 59);
+
+                        const dosars = await Dosar.find({
+                            $or: [
+                                {
+                                    status: 'Activ',
+                                    dataInceput: { $lte: searchDate },
+                                    dataFinal: { $gte: searchDate }
+                                },
+                                {
+                                    dataInceput: { $gte: startOfDay, $lte: endOfDay }
+                                }
+                            ]
+                        });
+
+                        if (dosars.length === 0) {
+                            return await interaction.editReply({ content: '✅ Nu exista activitati la aceasta data si ora.' });
+                        }
+
+                        let text = '';
+                        for (const d of dosars) {
+                            const duration = d.dataFinal 
+                                ? getDuration(new Date(d.dataInceput), new Date(d.dataFinal))
+                                : getDuration(new Date(d.dataInceput), new Date());
+
+                            text += `\n**#${d.dosarId}** | ${d.tipActivitate} | ${d.status} | Durata: ${duration}`;
+                        }
+
+                        const embed = new EmbedBuilder()
+                            .setTitle(`📋 Activități la ${dataStr} ${oraStr}`)
+                            .setColor('Blue')
+                            .setDescription(text)
+                            .setFooter({ text: `Total: ${dosars.length} activități` })
+                            .setTimestamp();
+
+                        await interaction.editReply({ embeds: [embed] });
+
+                    } catch (err) {
+                        console.error('Eroare dosar cauta-ora:', err);
+                        await interaction.editReply({ content: '❌ Data/ora invalida. Foloseste format DD-MM-YYYY si HH:MM' });
+                    }
+                }
+
+                // ================= DOSAR MEMBRU =================
+                if (sub === 'membru') {
+                    try {
+                        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+                        const user = interaction.options.getUser('utilizator');
+                        const dosars = await Dosar.find({
+                            participantsIds: user.id,
+                            status: { $in: ['Finalizat', 'Închis automat'] }
+                        });
+
+                        if (dosars.length === 0) {
+                            return await interaction.editReply({ 
+                                content: `✅ ${user.tag} nu are activitati inchise.` 
+                            });
+                        }
+
+                        const statsMap = {};
+                        let totalDuration = 0;
+
+                        dosars.forEach(d => {
+                            const duration = getDuration(new Date(d.dataInceput), new Date(d.dataFinal || Date.now()));
+                            const durationMs = (new Date(d.dataFinal || Date.now())) - (new Date(d.dataInceput));
+                            totalDuration += durationMs;
+
+                            if (!statsMap[d.tipActivitate]) {
+                                statsMap[d.tipActivitate] = 0;
+                            }
+                            statsMap[d.tipActivitate]++;
+                        });
+
+                        const legalCount = dosars.filter(d => getCategorie(d.tipActivitate) === 'Legală').length;
+                        const illegalCount = dosars.filter(d => getCategorie(d.tipActivitate) === 'Ilegală').length;
+
+                        const totalHours = Math.floor(totalDuration / (1000 * 60 * 60));
+                        const totalMinutes = Math.floor((totalDuration % (1000 * 60 * 60)) / (1000 * 60));
+
+                        let breakdown = '';
+                        Object.entries(statsMap).forEach(([activity, count]) => {
+                            breakdown += `${activity}: ${count}\n`;
+                        });
+
+                        const embed = new EmbedBuilder()
+                            .setTitle(`📊 Statistici ${user.tag}`)
+                            .setColor('Blue')
+                            .addFields(
+                                { name: '📈 Total activități', value: `${dosars.length}`, inline: true },
+                                { name: '✅ Activități legale', value: `${legalCount}`, inline: true },
+                                { name: '⛔ Activități ilegale', value: `${illegalCount}`, inline: true },
+                                { name: '📝 Defalcare', value: breakdown || 'Nicio activitate', inline: false },
+                                { name: '⏱️ Timp total', value: `${totalHours}h ${totalMinutes}m`, inline: false }
+                            )
+                            .setThumbnail(user.displayAvatarURL())
+                            .setFooter({ text: 'Sistem Automat de Evidență Activități RP' })
+                            .setTimestamp();
+
+                        await interaction.editReply({ embeds: [embed] });
+
+                    } catch (err) {
+                        console.error('Eroare dosar membru:', err);
+                        await interaction.editReply({ content: '❌ Eroare la cautarea statisticilor.' });
+                    }
+                }
+            }
         }
 
         // =====================================================
-        // MODAL CV
+        // MODAL SUBMIT
         // =====================================================
 
         if (interaction.isModalSubmit()) {
@@ -1345,6 +1932,115 @@ client.on(Events.InteractionCreate, async interaction => {
 
                     flags: MessageFlags.Ephemeral
                 });
+            }
+
+            // ================= DOSAR MODAL HANDLERS =================
+
+            if (interaction.customId.startsWith('dosar_start_modal_')) {
+                try {
+                    const tempData = activeDosars.get(interaction.user.id);
+                    if (!tempData) {
+                        return await interaction.reply({
+                            content: '❌ Session expirată. Incearca din nou.',
+                            flags: MessageFlags.Ephemeral
+                        });
+                    }
+
+                    // Show file upload prompt
+                    const modal = new ModalBuilder()
+                        .setCustomId(`dosar_image_modal_${Date.now()}`)
+                        .setTitle('📁 Incarca Poza');
+
+                    const imageUrlInput = new TextInputBuilder()
+                        .setCustomId('image_url')
+                        .setLabel('URL Poza (obligatoriu)')
+                        .setStyle(TextInputStyle.Short)
+                        .setRequired(true);
+
+                    modal.addComponents(
+                        new ActionRowBuilder().addComponents(imageUrlInput)
+                    );
+
+                    // Store more data
+                    const bodycam = interaction.fields.getTextInputValue('bodycam') || null;
+                    const observatii = interaction.fields.getTextInputValue('observatii') || null;
+
+                    tempData.bodycam = bodycam;
+                    tempData.observatii = observatii;
+                    activeDosars.set(interaction.user.id, tempData);
+
+                    return await interaction.showModal(modal);
+
+                } catch (err) {
+                    console.error('Eroare modal dosar start:', err);
+                    await interaction.reply({
+                        content: '❌ Eroare la prelucrarea formularului.',
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+            }
+
+            if (interaction.customId.startsWith('dosar_image_modal_')) {
+                try {
+                    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+                    const tempData = activeDosars.get(interaction.user.id);
+                    if (!tempData) {
+                        return await interaction.editReply({
+                            content: '❌ Session expirată.'
+                        });
+                    }
+
+                    const imageUrl = interaction.fields.getTextInputValue('image_url');
+
+                    dosarIdCounter++;
+                    const dosarId = dosarIdCounter.toString().padStart(5, '0');
+
+                    const dosar = new Dosar({
+                        dosarId,
+                        creatorId: tempData.creatorId,
+                        participantsIds: tempData.participantsIds,
+                        tipActivitate: tempData.tipActivitate,
+                        categorie: getCategorie(tempData.tipActivitate),
+                        imagine: imageUrl,
+                        bodycam: tempData.bodycam,
+                        observatii: tempData.observatii,
+                        status: 'Activ',
+                        dataInceput: new Date()
+                    });
+
+                    await dosar.save();
+
+                    const participants = tempData.participantsIds.map(id => `<@${id}>`);
+                    const embed = await createDosarEmbed(dosar, participants);
+
+                    const channel = await client.channels.fetch(dosarChannelId);
+                    const message = await channel.send({ embeds: [embed] });
+
+                    dosar.messageId = message.id;
+                    dosar.channelId = channel.id;
+                    await dosar.save();
+
+                    activeDosars.delete(interaction.user.id);
+
+                    // Schedule reminder for 60 minutes
+                    setTimeout(async () => {
+                        const checkDosar = await Dosar.findOne({ dosarId });
+                        if (checkDosar && checkDosar.status === 'Activ') {
+                            await sendReminderDM(checkDosar);
+                        }
+                    }, 60 * 60 * 1000);
+
+                    await interaction.editReply({
+                        content: `✅ Dosarul #${dosarId} a fost creat cu succes!`
+                    });
+
+                } catch (err) {
+                    console.error('Eroare modal image:', err);
+                    await interaction.editReply({
+                        content: '❌ Eroare la salvarea dosarului.'
+                    });
+                }
             }
         }
 
@@ -1590,6 +2286,74 @@ client.on(Events.InteractionCreate, async interaction => {
                     content: `✅ Cererea #${requestId} a fost RESPINSA de ${interaction.user.tag}`,
                     flags: MessageFlags.Ephemeral
                 });
+            }
+
+            // =====================================================
+            // REMINDER BUTTONS
+            // =====================================================
+
+            if (interaction.customId.startsWith('reminder_continue_')) {
+                try {
+                    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+                    const dosarId = interaction.customId.split('_')[2];
+                    const dosar = await Dosar.findOne({ dosarId });
+
+                    if (!dosar || dosar.status !== 'Activ') {
+                        return await interaction.editReply({ content: '❌ Dosarul nu a fost găsit.' });
+                    }
+
+                    dosar.reminderSent = false;
+                    await dosar.save();
+
+                    // Clear old timeout if exists
+                    if (activeDosarReminders.has(dosarId)) {
+                        clearTimeout(activeDosarReminders.get(dosarId));
+                    }
+
+                    // Schedule new reminder for 60 minutes
+                    setTimeout(async () => {
+                        const checkDosar = await Dosar.findOne({ dosarId });
+                        if (checkDosar && checkDosar.status === 'Activ') {
+                            await sendReminderDM(checkDosar);
+                        }
+                    }, 60 * 60 * 1000);
+
+                    await interaction.editReply({ content: '✅ Timerul a fost resetat. Vei primi o noua notificare peste 60 de minute.' });
+
+                } catch (err) {
+                    console.error('Eroare reminder continue:', err);
+                }
+            }
+
+            if (interaction.customId.startsWith('reminder_close_')) {
+                try {
+                    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+                    const dosarId = interaction.customId.split('_')[2];
+                    const dosar = await Dosar.findOne({ dosarId });
+
+                    if (!dosar || dosar.status !== 'Activ') {
+                        return await interaction.editReply({ content: '❌ Dosarul nu a fost găsit.' });
+                    }
+
+                    dosar.status = 'Finalizat';
+                    dosar.dataFinal = new Date();
+                    await dosar.save();
+
+                    // Clear timeout
+                    if (activeDosarReminders.has(dosarId)) {
+                        clearTimeout(activeDosarReminders.get(dosarId));
+                        activeDosarReminders.delete(dosarId);
+                    }
+
+                    await updateDosarMessage(dosar);
+
+                    await interaction.editReply({ content: '✅ Dosarul a fost finalizat.' });
+
+                } catch (err) {
+                    console.error('Eroare reminder close:', err);
+                }
             }
 
             // =====================================================
