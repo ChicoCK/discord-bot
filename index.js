@@ -51,6 +51,8 @@ const amenzi = new Map();
 const leaveRequests = new Map(); // leave request storage
 const leaveHistory = new Map(); // leave request history
 
+const activities = new Map();
+let activityCounter = 0;
 // ================= CONFIG =================
 
 const taskChannelId = '1494860985066848357';
@@ -73,6 +75,39 @@ client.once(Events.ClientReady, async () => {
 
     const commands = [
 
+           // ================= DOSAR =================
+
+new SlashCommandBuilder()
+    .setName('activity')
+    .setDescription('Sistem activitati dosar RP')
+    .addSubcommand(cmd =>
+        cmd.setName('start')
+            .setDescription('Start activitate')
+    )
+    .addSubcommand(cmd =>
+        cmd.setName('add')
+            .setDescription('Adauga activitate')
+            .addStringOption(opt =>
+                opt.setName('id')
+                    .setDescription('ID activitate')
+                    .setRequired(true)
+            )
+            .addStringOption(opt =>
+                opt.setName('tip')
+                    .setDescription('Tip activitate (Patrula, Braconier etc)')
+                    .setRequired(true)
+            )
+    )
+    .addSubcommand(cmd =>
+        cmd.setName('stop')
+            .setDescription('Opreste activitatea')
+            .addStringOption(opt =>
+                opt.setName('id')
+                    .setDescription('ID activitate')
+                    .setRequired(true)
+            )
+    ),
+        
         // ================= CV =================
 
         new SlashCommandBuilder()
@@ -427,6 +462,135 @@ client.on(Events.InteractionCreate, async interaction => {
     try {
 
         if (interaction.isChatInputCommand()) {
+
+            // =====================================================
+            // /DOSAR
+            // =====================================================
+
+if (interaction.commandName === 'activity') {
+
+    const sub = interaction.options.getSubcommand();
+
+    // ================= START =================
+    if (sub === 'start') {
+
+        activityCounter++;
+        const id = `ACT-${activityCounter}`;
+
+        activities.set(id, {
+            leader: interaction.user.id,
+            channel: interaction.channel.id,
+            startTime: Date.now(),
+            status: 'OPEN',
+            logs: []
+        });
+
+        const embed = new EmbedBuilder()
+            .setTitle('🟦 ACTIVITATE STARTED')
+            .setColor('Blue')
+            .addFields(
+                { name: '🆔 ID', value: id },
+                { name: '👮 Leader', value: `<@${interaction.user.id}>` },
+                { name: '📌 Status', value: 'OPEN' }
+            )
+            .setTimestamp();
+
+        return interaction.reply({
+            embeds: [embed]
+        });
+    }
+
+        if (sub === 'add') {
+
+        const id = interaction.options.getString('id');
+        const tip = interaction.options.getString('tip');
+
+        const activity = activities.get(id);
+
+        if (!activity)
+            return interaction.reply({
+                content: '❌ Activitate inexistentă',
+                flags: MessageFlags.Ephemeral
+            });
+
+        const attachment = interaction.attachments?.first();
+
+        // Discord slash nu trimite attachments direct -> folosim message followup workaround
+        const message = await interaction.fetchReply().catch(() => null);
+
+        const channelMessages = await interaction.channel.messages.fetch({ limit: 10 });
+        const lastMsg = channelMessages.find(m => m.author.id === interaction.user.id);
+        const img = lastMsg?.attachments?.first();
+
+        if (!img)
+            return interaction.reply({
+                content: '❌ TREBUIE POZĂ OBLIGATORIU!',
+                flags: MessageFlags.Ephemeral
+            });
+
+        activity.logs.push({
+            type: tip,
+            photo: img.url,
+            user: interaction.user.id,
+            time: Date.now()
+        });
+
+        const embed = new EmbedBuilder()
+            .setTitle('➕ ACTIVITATE ADAUGATĂ')
+            .setColor('Green')
+            .addFields(
+                { name: '🆔 ID', value: id },
+                { name: '📌 Tip', value: tip },
+                { name: '👤 De către', value: `<@${interaction.user.id}>` }
+            )
+            .setImage(img.url);
+
+        return interaction.reply({ embeds: [embed] });
+    }
+
+        if (sub === 'stop') {
+
+        const id = interaction.options.getString('id');
+
+        const activity = activities.get(id);
+
+        if (!activity)
+            return interaction.reply({
+                content: '❌ Activitate inexistentă',
+                flags: MessageFlags.Ephemeral
+            });
+
+        activity.status = 'CLOSED';
+        activity.endTime = Date.now();
+
+        const duration = Math.floor((activity.endTime - activity.startTime) / 60000);
+
+        let text = '';
+
+        activity.logs.forEach((l, i) => {
+            text += `\n${i + 1}. ${l.type} - <@${l.user}>`;
+        });
+
+        const embed = new EmbedBuilder()
+            .setTitle('🟥 DOSAR ACTIVITATE FINALIZAT')
+            .setColor('Red')
+            .addFields(
+                { name: '🆔 ID', value: id },
+                { name: '⏱ Durată', value: `${duration} min` },
+                { name: '📊 Activități', value: text || 'Nimic' }
+            )
+            .setTimestamp();
+
+        const channel = await client.channels.fetch(taskLogsChannelId);
+
+        await channel.send({ embeds: [embed] });
+
+        return interaction.reply({
+            content: '✅ Activitate închisă și arhivată.',
+            flags: MessageFlags.Ephemeral
+        });
+    }
+}
             
             // =====================================================
             // /CV
