@@ -51,6 +51,24 @@ const amenzi = new Map();
 const leaveRequests = new Map(); // leave request storage
 const leaveHistory = new Map(); // leave request history
 
+const fs = require('fs');
+
+const seifChannelId = '1511120983279276104';
+const seifLogsChannelId = '1511149046000128091';
+
+let seif = {};
+
+try {
+
+    seif = JSON.parse(
+        fs.readFileSync('./seif.json')
+    );
+
+} catch {
+
+    seif = {};
+}
+
 // ================= CONFIG =================
 
 const taskChannelId = '1494860985066848357';
@@ -66,6 +84,31 @@ const leadershipRoleIds = [
 ];
 
 // ================= READY =================
+
+function createSeifEmbed() {
+
+    let text = '';
+
+    for (const [produs, cantitate] of Object.entries(seif)) {
+
+        text += `📦 ${produs}: ${cantitate}x\n`;
+    }
+
+    if (!text) {
+
+        text = 'Seiful este gol.';
+    }
+
+    return new EmbedBuilder()
+
+        .setTitle('🏦 SEIF FAMILIE')
+
+        .setColor('Gold')
+
+        .setDescription(text)
+
+        .setTimestamp();
+}
 
 client.once(Events.ClientReady, async () => {
 
