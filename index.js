@@ -67,98 +67,59 @@ const seifRoleId = '1503084616695681064';
 
 // ================= READY =================
 
-function buildSeifEmbed() {
-
-    let text = '';
-
-    const entries = [...seif.entries()]
-        .sort((a, b) => a[0].localeCompare(b[0]));
-
-    if (entries.length === 0) {
-        text = '*Nu există produse în seif.*';
-    } else {
-
-        for (const [produs, cantitate] of entries) {
-
-            text += `*📦 ${produs}* → **${cantitate}x**\n`;
-        }
-    }
-
-    return new EmbedBuilder()
-        .setTitle('🏦 TSC SEIF')
-        .setColor('#00F4FF')
-        .setDescription(
-            `> Inventarul oficial al familiei.\n\n━━━━━━━━━━━━━━━━\n\n${text}\n━━━━━━━━━━━━━━━━`
-        )
-        .setFooter({ text: 'TSC Family System' })
-        .setTimestamp();
-}
-
 client.once(Events.ClientReady, async () => {
 
     console.log(`🤖 Bot pornit ca ${client.user.tag}`);
 
-    const channel = await client.channels.fetch(seifChannelId);
+    try {
 
-    const messages = await channel.messages.fetch({ limit: 10 });
+        const channel = await client.channels.fetch(seifChannelId);
 
-    const existing = messages.find(m =>
-        m.author.id === client.user.id &&
-        m.embeds.length > 0 &&
-        m.embeds[0].title === '🏦 TSC SEIF'
-    );
+        const messages = await channel.messages.fetch({ limit: 10 });
 
-    const buttons = new ActionRowBuilder()
-    .addComponents(
-        new ButtonBuilder()
-            .setCustomId('seif_add')
-            .setLabel('➕ Adaugă produs')
-            .setStyle(ButtonStyle.Success),
+        const existing = messages.find(m =>
+            m.author.id === client.user.id &&
+            m.embeds.length > 0 &&
+            m.embeds[0].title === '🏦 TSC SEIF'
+        );
 
-        new ButtonBuilder()
-            .setCustomId('seif_remove')
-            .setLabel('➖ Scoate produs')
-            .setStyle(ButtonStyle.Danger)
-    );
+        const buttons = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId('seif_add')
+                    .setLabel('➕ Adaugă produs')
+                    .setStyle(ButtonStyle.Success),
 
-    if (existing) {
+                new ButtonBuilder()
+                    .setCustomId('seif_remove')
+                    .setLabel('➖ Scoate produs')
+                    .setStyle(ButtonStyle.Danger)
+            );
 
-        seifMessageId = existing.id;
+        if (existing) {
 
-        await existing.edit({
-            embeds: [buildSeifEmbed()],
-            components: [buttons]
-        });
+            seifMessageId = existing.id;
 
-    } else {
+            await existing.edit({
+                embeds: [buildSeifEmbed()],
+                components: [buttons]
+            });
 
-        const msg = await channel.send({
-            embeds: [buildSeifEmbed()],
-            components: [buttons]
-        });
+        } else {
 
-        seifMessageId = msg.id;
+            const msg = await channel.send({
+                embeds: [buildSeifEmbed()],
+                components: [buttons]
+            });
+
+            seifMessageId = msg.id;
+        }
+
+    } catch (err) {
+        console.error('Eroare la seif:', err);
     }
 
 });
-    
-    const commands = [
-
-const channel = await client.channels.fetch(seifChannelId);
-
-const buttons = new ActionRowBuilder()
-.addComponents(
-
-    new ButtonBuilder()
-        .setCustomId('seif_add')
-        .setLabel('➕ Adaugă produs')
-        .setStyle(ButtonStyle.Success),
-
-    new ButtonBuilder()
-        .setCustomId('seif_remove')
-        .setLabel('➖ Scoate produs')
-        .setStyle(ButtonStyle.Danger)
-);
         
         // ================= CV =================
 
