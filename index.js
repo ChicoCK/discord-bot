@@ -51,7 +51,8 @@ const amenzi = new Map();
 const leaveRequests = new Map(); // leave request storage
 const leaveHistory = new Map(); // leave request history
 
-const seif = new Map();
+const seif = new Map(); // { item: quantity }
+const seifHistory = new Map(); // logs per action
 let seifMessageId = null;
 
 // ================= CONFIG =================
@@ -71,31 +72,26 @@ const leadershipRoleIds = [
     '1493768690133499926'
 ];
 
-// ================= EMBED SEIF =================
-
 function buildSeifEmbed() {
 
-    let text = '';
+    if (seif.size === 0) {
+        return new EmbedBuilder()
+            .setTitle('🏦 SEIF')
+            .setColor('Gold')
+            .setDescription('Nu există produse în seif.');
+    }
 
-    const entries = [...seif.entries()]
-        .sort((a, b) => a[0].localeCompare(b[0]));
+    let desc = '';
 
-    if (entries.length === 0) {
-        text = '*Nu există produse în seif.*';
-    } else {
-        for (const [produs, cantitate] of entries) {
-            text += `*📦 ${produs}* → **${cantitate}x**\n`;
-        }
+    for (const [item, qty] of seif.entries()) {
+        desc += `📦 **${item}** — ${qty} buc\n`;
     }
 
     return new EmbedBuilder()
-        .setTitle('🏦 TSC SEIF')
-        .setColor('#00F4FF')
-        .setDescription(
-            `> Inventarul oficial al familiei.\n\n━━━━━━━━━━━━━━━━\n\n${text}\n━━━━━━━━━━━━━━━━`
-        )
-        .setFooter({ text: 'TSC Family System' })
-        .setTimestamp();
+        .setTitle('🏦 SEIF')
+        .setColor('Gold')
+        .setDescription(desc)
+        .setFooter({ text: 'Sistem magazin TSC' });
 }
 
 // ================= READY =================
@@ -104,51 +100,61 @@ client.once(Events.ClientReady, async () => {
 
     console.log(`🤖 Bot pornit ca ${client.user.tag}`);
 
-    try {
-        const channel = await client.channels.fetch(seifChannelId);
+    const commands = [
 
-        const messages = await channel.messages.fetch({ limit: 10 });
+        try {
 
-        const existing = messages.find(m =>
-            m.author.id === client.user.id &&
-            m.embeds.length > 0 &&
-            m.embeds[0].title === '🏦 TSC SEIF'
-        );
+    const channel = await client.channels.fetch(seifChannelId);
 
-        const buttons = new ActionRowBuilder().addComponents(
+    const messages = await channel.messages.fetch({ limit: 20 });
+
+    const existing = messages.find(m =>
+        m.author.id === client.user.id &&
+        m.embeds.length > 0 &&
+        m.embeds[0].title === '🏦 SEIF'
+    );
+
+    const buttons = new ActionRowBuilder()
+        .addComponents(
             new ButtonBuilder()
                 .setCustomId('seif_add')
-                .setLabel('➕ Adaugă produs')
+                .setLabel('➕ Adaugă')
                 .setStyle(ButtonStyle.Success),
 
             new ButtonBuilder()
                 .setCustomId('seif_remove')
-                .setLabel('➖ Scoate produs')
-                .setStyle(ButtonStyle.Danger)
+                .setLabel('➖ Scoate')
+                .setStyle(ButtonStyle.Danger),
+
+            new ButtonBuilder()
+                .setCustomId('seif_history')
+                .setLabel('📜 Istoric')
+                .setStyle(ButtonStyle.Secondary)
         );
 
-        if (existing) {
-            seifMessageId = existing.id;
-            await existing.edit({
-                embeds: [buildSeifEmbed()],
-                components: [buttons]
-            });
-        } else {
-            const msg = await channel.send({
-                embeds: [buildSeifEmbed()],
-                components: [buttons]
-            });
+    if (existing) {
 
-            seifMessageId = msg.id;
-        }
+        seifMessageId = existing.id;
 
-    } catch (err) {
-        console.error('Eroare la seif:', err);
+        await existing.edit({
+            embeds: [buildSeifEmbed()],
+            components: [buttons]
+        });
+
+    } else {
+
+        const msg = await channel.send({
+            embeds: [buildSeifEmbed()],
+            components: [buttons]
+        });
+
+        seifMessageId = msg.id;
     }
-});
 
-    const commands = [
-
+} catch (err) {
+    console.error('Seif error:', err);
+}
+        
         // ================= CV =================
 
         new SlashCommandBuilder()
@@ -425,6 +431,7 @@ client.once(Events.ClientReady, async () => {
 
     // Start expiration checker
     startExpirationChecker();
+});
 
 // ================= ERRORS =================
 
@@ -502,7 +509,126 @@ client.on(Events.InteractionCreate, async interaction => {
     try {
 
         if (interaction.isChatInputCommand()) {
-            
+
+            // =====================================================
+            // /SEIF
+            // =====================================================
+
+if (interaction.customId === 'seif_add') {
+
+    const hasRole = interaction.member.roles.cache.has(seifRoleId);
+
+    if (!hasRole) {
+        return interaction.reply({
+            content: '❌ Nu ai permisiune.',
+            flags: MessageFlags.Ephemeral
+        });
+    }
+
+    const item = 'produs_demo'; // simplu (dacă vrei îl fac modal după)
+    const qty = 1;
+
+    seif.set(item, (seif.get(item) || 0) + qty);
+
+    // log
+    if (!seifHistory.has(item)) seifHistory.set(item, []);
+    seifHistory.get(item).push({
+        user: interaction.user.tag,
+        action: 'ADD',
+        qty,
+        date: new Date().toLocaleString()
+    });
+
+    const channel = await client.channels.fetch(seifChannelId);
+
+    const msg = await channel.messages.fetch(seifMessageId);
+
+    await msg.edit({
+        embeds: [buildSeifEmbed()]
+    });
+
+    return interaction.reply({
+        content: `✅ Ai adăugat ${qty}x ${item}`,
+        flags: MessageFlags.Ephemeral
+    });
+}
+
+            if (interaction.customId === 'seif_remove') {
+
+    const hasRole = interaction.member.roles.cache.has(seifRoleId);
+
+    if (!hasRole) {
+        return interaction.reply({
+            content: '❌ Nu ai permisiune.',
+            flags: MessageFlags.Ephemeral
+        });
+    }
+
+    const item = 'produs_demo';
+
+    if (!seif.has(item)) {
+        return interaction.reply({
+            content: '❌ Produs inexistent.',
+            flags: MessageFlags.Ephemeral
+        });
+    }
+
+    const current = seif.get(item);
+    const qty = 1;
+
+    if (current <= 1) {
+        seif.delete(item);
+    } else {
+        seif.set(item, current - qty);
+    }
+
+    if (!seifHistory.has(item)) seifHistory.set(item, []);
+    seifHistory.get(item).push({
+        user: interaction.user.tag,
+        action: 'REMOVE',
+        qty,
+        date: new Date().toLocaleString()
+    });
+
+    const msg = await interaction.channel.messages.fetch(seifMessageId);
+
+    await msg.edit({
+        embeds: [buildSeifEmbed()]
+    });
+
+    return interaction.reply({
+        content: `❌ Ai scos ${qty}x ${item}`,
+        flags: MessageFlags.Ephemeral
+    });
+}
+
+            if (interaction.customId === 'seif_history') {
+
+    const item = 'produs_demo';
+
+    const history = seifHistory.get(item) || [];
+
+    if (history.length === 0) {
+        return interaction.reply({
+            content: 'ℹ️ Nu există istoric.',
+            flags: MessageFlags.Ephemeral
+        });
+    }
+
+    const text = history.map(h =>
+        `• ${h.action} | ${h.qty} | ${h.user} | ${h.date}`
+    ).join('\n');
+
+    const embed = new EmbedBuilder()
+        .setTitle('📜 ISTORIC SEIF')
+        .setColor('Blue')
+        .setDescription(text);
+
+    return interaction.reply({
+        embeds: [embed],
+        flags: MessageFlags.Ephemeral
+    });
+}
             // =====================================================
             // /CV
             // =====================================================
