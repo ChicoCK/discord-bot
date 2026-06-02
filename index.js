@@ -425,7 +425,6 @@ client.once(Events.ClientReady, async () => {
 
     // Start expiration checker
     startExpirationChecker();
-});
 
 // ================= ERRORS =================
 
