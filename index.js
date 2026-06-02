@@ -41,6 +41,9 @@ const client = new Client({
 });
 
 // ================= STORAGE =================
+const seif = new Map();
+let seifMessageId = null;
+const seifChannelId = '1511120983279276104';
 
 const applications = new Map();
 const tasks = new Map();
@@ -50,9 +53,6 @@ const amenzi = new Map();
 
 const leaveRequests = new Map(); // leave request storage
 const leaveHistory = new Map(); // leave request history
-
-const seif = new Map();
-let seifMessageId = null;
 
 // ================= CONFIG =================
 
@@ -70,7 +70,6 @@ const leadershipRoleIds = [
 ];
 
 function buildSeifEmbed() {
-
     const items = Array.from(seif.entries());
 
     return new EmbedBuilder()
@@ -79,14 +78,59 @@ function buildSeifEmbed() {
         .setDescription(
             items.length
                 ? items.map(([k, v]) => `**${k}**: ${v}`).join('\n')
-                : 'Nu există produse în seif.'
+                : 'Nu există produse.'
         );
+}
+
+function buildSeifButtons() {
+    return new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId('seif_add')
+            .setLabel('➕ Adaugă')
+            .setStyle(ButtonStyle.Success),
+
+        new ButtonBuilder()
+            .setCustomId('seif_remove')
+            .setLabel('➖ Scoate')
+            .setStyle(ButtonStyle.Danger)
+    );
+}
+
+async function updateSeif(client) {
+    try {
+        const channel = await client.channels.fetch(seifChannelId);
+
+        const embed = buildSeifEmbed();
+        const buttons = buildSeifButtons();
+
+        if (!seifMessageId) {
+            const msg = await channel.send({
+                embeds: [embed],
+                components: [buttons]
+            });
+
+            seifMessageId = msg.id;
+        } else {
+            const msg = await channel.messages.fetch(seifMessageId);
+
+            await msg.edit({
+                embeds: [embed],
+                components: [buttons]
+            });
+        }
+
+    } catch (err) {
+        console.log("SEIF ERROR:", err);
+    }
 }
 // ================= READY =================
 
 client.once(Events.ClientReady, async () => {
-await updateSeif(client);
-    console.log(`🤖 Bot pornit ca ${client.user.tag}`);
+
+    console.log(`🤖 Bot pornit`);
+
+    await updateSeif(client); // <- ACUM EXISTĂ ȘI NU MAI CRAPĂ
+});
 console.log("🧪 SEIF START TEST");
 
 try {
