@@ -514,120 +514,113 @@ client.on(Events.InteractionCreate, async interaction => {
             // /SEIF
             // =====================================================
 
-if (interaction.customId === 'seif_add') {
+// ================= SEIF BUTTONS =================
 
-    const hasRole = interaction.member.roles.cache.has(seifRoleId);
+if (interaction.isButton()) {
 
-    if (!hasRole) {
+    // ================= ADD =================
+    if (interaction.customId === 'seif_add') {
+
+        const hasRole = interaction.member.roles.cache.has(seifRoleId);
+
+        if (!hasRole) {
+            return interaction.reply({
+                content: '❌ Nu ai permisiune.',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
+        const modal = new ModalBuilder()
+            .setCustomId('seif_add_modal')
+            .setTitle('➕ Adaugă în seif');
+
+        const item = new TextInputBuilder()
+            .setCustomId('item')
+            .setLabel('Nume produs')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true);
+
+        const qty = new TextInputBuilder()
+            .setCustomId('qty')
+            .setLabel('Cantitate')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true);
+
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(item),
+            new ActionRowBuilder().addComponents(qty)
+        );
+
+        return await interaction.showModal(modal);
+    }
+
+    // ================= REMOVE =================
+    if (interaction.customId === 'seif_remove') {
+
+        const hasRole = interaction.member.roles.cache.has(seifRoleId);
+
+        if (!hasRole) {
+            return interaction.reply({
+                content: '❌ Nu ai permisiune.',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
+        const modal = new ModalBuilder()
+            .setCustomId('seif_remove_modal')
+            .setTitle('➖ Scoate din seif');
+
+        const item = new TextInputBuilder()
+            .setCustomId('item')
+            .setLabel('Nume produs')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true);
+
+        const qty = new TextInputBuilder()
+            .setCustomId('qty')
+            .setLabel('Cantitate')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true);
+
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(item),
+            new ActionRowBuilder().addComponents(qty)
+        );
+
+        return await interaction.showModal(modal);
+    }
+
+    // ================= HISTORY =================
+    if (interaction.customId === 'seif_history') {
+
+        const item = null;
+        let text = '';
+
+        if (seifHistory.size === 0) {
+            return interaction.reply({
+                content: 'ℹ️ Nu există istoric.',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
+        for (const [key, history] of seifHistory.entries()) {
+            text += `\n📦 **${key}**\n`;
+
+            history.slice(-5).forEach(h => {
+                text += `• ${h.action} | ${h.qty} | ${h.user} | ${h.date}\n`;
+            });
+        }
+
+        const embed = new EmbedBuilder()
+            .setTitle('📜 ISTORIC SEIF')
+            .setColor('Blue')
+            .setDescription(text);
+
         return interaction.reply({
-            content: '❌ Nu ai permisiune.',
+            embeds: [embed],
             flags: MessageFlags.Ephemeral
         });
     }
-
-    const item = 'produs_demo'; // simplu (dacă vrei îl fac modal după)
-    const qty = 1;
-
-    seif.set(item, (seif.get(item) || 0) + qty);
-
-    // log
-    if (!seifHistory.has(item)) seifHistory.set(item, []);
-    seifHistory.get(item).push({
-        user: interaction.user.tag,
-        action: 'ADD',
-        qty,
-        date: new Date().toLocaleString()
-    });
-
-    const channel = await client.channels.fetch(seifChannelId);
-
-    const msg = await channel.messages.fetch(seifMessageId);
-
-    await msg.edit({
-        embeds: [buildSeifEmbed()]
-    });
-
-    return interaction.reply({
-        content: `✅ Ai adăugat ${qty}x ${item}`,
-        flags: MessageFlags.Ephemeral
-    });
-}
-
-            if (interaction.customId === 'seif_remove') {
-
-    const hasRole = interaction.member.roles.cache.has(seifRoleId);
-
-    if (!hasRole) {
-        return interaction.reply({
-            content: '❌ Nu ai permisiune.',
-            flags: MessageFlags.Ephemeral
-        });
-    }
-
-    const item = 'produs_demo';
-
-    if (!seif.has(item)) {
-        return interaction.reply({
-            content: '❌ Produs inexistent.',
-            flags: MessageFlags.Ephemeral
-        });
-    }
-
-    const current = seif.get(item);
-    const qty = 1;
-
-    if (current <= 1) {
-        seif.delete(item);
-    } else {
-        seif.set(item, current - qty);
-    }
-
-    if (!seifHistory.has(item)) seifHistory.set(item, []);
-    seifHistory.get(item).push({
-        user: interaction.user.tag,
-        action: 'REMOVE',
-        qty,
-        date: new Date().toLocaleString()
-    });
-
-    const msg = await interaction.channel.messages.fetch(seifMessageId);
-
-    await msg.edit({
-        embeds: [buildSeifEmbed()]
-    });
-
-    return interaction.reply({
-        content: `❌ Ai scos ${qty}x ${item}`,
-        flags: MessageFlags.Ephemeral
-    });
-}
-
-            if (interaction.customId === 'seif_history') {
-
-    const item = 'produs_demo';
-
-    const history = seifHistory.get(item) || [];
-
-    if (history.length === 0) {
-        return interaction.reply({
-            content: 'ℹ️ Nu există istoric.',
-            flags: MessageFlags.Ephemeral
-        });
-    }
-
-    const text = history.map(h =>
-        `• ${h.action} | ${h.qty} | ${h.user} | ${h.date}`
-    ).join('\n');
-
-    const embed = new EmbedBuilder()
-        .setTitle('📜 ISTORIC SEIF')
-        .setColor('Blue')
-        .setDescription(text);
-
-    return interaction.reply({
-        embeds: [embed],
-        flags: MessageFlags.Ephemeral
-    });
 }
             // =====================================================
             // /CV
@@ -1548,6 +1541,81 @@ if (interaction.customId === 'seif_add') {
                 });
             }
         }
+
+        // ================= SEIF ADD MODAL =================
+if (interaction.customId === 'seif_add_modal') {
+
+    const item = interaction.fields.getTextInputValue('item');
+    const qty = parseInt(interaction.fields.getTextInputValue('qty'));
+
+    if (!seif.has(item)) seif.set(item, 0);
+    seif.set(item, seif.get(item) + qty);
+
+    if (!seifHistory.has(item)) seifHistory.set(item, []);
+
+    seifHistory.get(item).push({
+        user: interaction.user.tag,
+        action: 'ADD',
+        qty,
+        date: new Date().toLocaleString()
+    });
+
+    const channel = await client.channels.fetch(seifChannelId);
+    const msg = await channel.messages.fetch(seifMessageId);
+
+    await msg.edit({
+        embeds: [buildSeifEmbed()]
+    });
+
+    return interaction.reply({
+        content: `✅ Ai adăugat ${qty}x ${item}`,
+        flags: MessageFlags.Ephemeral
+    });
+}
+
+
+// ================= SEIF REMOVE MODAL =================
+if (interaction.customId === 'seif_remove_modal') {
+
+    const item = interaction.fields.getTextInputValue('item');
+    const qty = parseInt(interaction.fields.getTextInputValue('qty'));
+
+    if (!seif.has(item)) {
+        return interaction.reply({
+            content: '❌ Produs inexistent.',
+            flags: MessageFlags.Ephemeral
+        });
+    }
+
+    const current = seif.get(item);
+
+    if (current <= qty) {
+        seif.delete(item);
+    } else {
+        seif.set(item, current - qty);
+    }
+
+    if (!seifHistory.has(item)) seifHistory.set(item, []);
+
+    seifHistory.get(item).push({
+        user: interaction.user.tag,
+        action: 'REMOVE',
+        qty,
+        date: new Date().toLocaleString()
+    });
+
+    const channel = await client.channels.fetch(seifChannelId);
+    const msg = await channel.messages.fetch(seifMessageId);
+
+    await msg.edit({
+        embeds: [buildSeifEmbed()]
+    });
+
+    return interaction.reply({
+        content: `❌ Ai scos ${qty}x ${item}`,
+        flags: MessageFlags.Ephemeral
+    });
+}
 
         // =====================================================
         // BUTTONS
