@@ -41,9 +41,6 @@ const client = new Client({
 });
 
 // ================= STORAGE =================
-const seif = new Map();
-let seifMessageId = null;
-const seifChannelId = '1511120983279276104';
 
 const applications = new Map();
 const tasks = new Map();
@@ -61,7 +58,6 @@ const taskLogsChannelId = '1503906070010269721';
 const invoireChannelId = '1493771851485417532'; // Invoire channel where requests are posted
 const invoireLogsChannelId = '1510636374812790865'; // Logs channel for accept/decline actions
 const invoirePermissionRoleId = '1504935162092195930'; // Permission role for buttons
-const seifChannelId = '1511120983279276104';
 
 let leaveRequestIdCounter = 0;
 
@@ -69,77 +65,12 @@ const leadershipRoleIds = [
     '1493768690133499926'
 ];
 
-function buildSeifEmbed() {
-    const items = Array.from(seif.entries());
-
-    return new EmbedBuilder()
-        .setTitle('🏦 SEIF PRODUSE GANG')
-        .setColor('Gold')
-        .setDescription(
-            items.length
-                ? items.map(([k, v]) => `**${k}**: ${v}`).join('\n')
-                : 'Nu există produse.'
-        );
-}
-
-function buildSeifButtons() {
-    return new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-            .setCustomId('seif_add')
-            .setLabel('➕ Adaugă')
-            .setStyle(ButtonStyle.Success),
-
-        new ButtonBuilder()
-            .setCustomId('seif_remove')
-            .setLabel('➖ Scoate')
-            .setStyle(ButtonStyle.Danger)
-    );
-}
-
-async function updateSeif(client) {
-    try {
-        const channel = await client.channels.fetch(seifChannelId);
-
-        const embed = buildSeifEmbed();
-        const buttons = buildSeifButtons();
-
-        if (!seifMessageId) {
-            const msg = await channel.send({
-                embeds: [embed],
-                components: [buttons]
-            });
-
-            seifMessageId = msg.id;
-        } else {
-            const msg = await channel.messages.fetch(seifMessageId);
-
-            await msg.edit({
-                embeds: [embed],
-                components: [buttons]
-            });
-        }
-
-    } catch (err) {
-        console.log("SEIF ERROR:", err);
-    }
-}
 // ================= READY =================
 
 client.once(Events.ClientReady, async () => {
 
-    console.log(`🤖 Bot pornit`);
+    console.log(`🤖 Bot pornit ca ${client.user.tag}`);
 
-    await updateSeif(client); // <- ACUM EXISTĂ ȘI NU MAI CRAPĂ
-});
-console.log("🧪 SEIF START TEST");
-
-try {
-    await updateSeif(client);
-    console.log("🧪 SEIF END TEST OK");
-} catch (err) {
-    console.log("🧨 SEIF CRASH:", err);
-}
-    
     const commands = [
 
         // ================= CV =================
@@ -496,56 +427,7 @@ client.on(Events.InteractionCreate, async interaction => {
     try {
 
         if (interaction.isChatInputCommand()) {
-            if (interaction.customId === 'seif_add') {
-
-    const modal = new ModalBuilder()
-        .setCustomId('seif_add_modal')
-        .setTitle('➕ Adaugă produs');
-
-    const produs = new TextInputBuilder()
-        .setCustomId('produs')
-        .setLabel('Ce produs? (ex: cocaine)')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true);
-
-    const cantitate = new TextInputBuilder()
-        .setCustomId('cantitate')
-        .setLabel('Cantitate')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true);
-
-    modal.addComponents(
-        new ActionRowBuilder().addComponents(produs),
-        new ActionRowBuilder().addComponents(cantitate)
-    );
-
-    return interaction.showModal(modal);
-}
-            if (interaction.customId === 'seif_remove') {
-
-    const modal = new ModalBuilder()
-        .setCustomId('seif_remove_modal')
-        .setTitle('➖ Scoate produs');
-
-    const produs = new TextInputBuilder()
-        .setCustomId('produs')
-        .setLabel('Ce produs?')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true);
-
-    const cantitate = new TextInputBuilder()
-        .setCustomId('cantitate')
-        .setLabel('Cantitate')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true);
-
-    modal.addComponents(
-        new ActionRowBuilder().addComponents(produs),
-        new ActionRowBuilder().addComponents(cantitate)
-    );
-
-    return interaction.showModal(modal);
-}
+            
             // =====================================================
             // /CV
             // =====================================================
@@ -1466,38 +1348,6 @@ client.on(Events.InteractionCreate, async interaction => {
             }
         }
 
-            if (interaction.customId === 'seif_add_modal') {
-
-    const produs = interaction.fields.getTextInputValue('produs').toLowerCase();
-    const cantitate = parseInt(interaction.fields.getTextInputValue('cantitate'));
-
-    seif.set(produs, (seif.get(produs) || 0) + cantitate);
-
-    await updateSeif(interaction.client);
-
-    return interaction.reply({
-        content: `✅ Adăugat ${cantitate}x ${produs}`,
-        flags: MessageFlags.Ephemeral
-    });
-}
-        if (interaction.customId === 'seif_remove_modal') {
-
-    const produs = interaction.fields.getTextInputValue('produs').toLowerCase();
-    const cantitate = parseInt(interaction.fields.getTextInputValue('cantitate'));
-
-    if (!seif.has(produs)) seif.set(produs, 0);
-
-    seif.set(produs, seif.get(produs) - cantitate);
-
-    if (seif.get(produs) <= 0) seif.delete(produs);
-
-    await updateSeif(interaction.client);
-
-    return interaction.reply({
-        content: `❌ Scos ${cantitate}x ${produs}`,
-        flags: MessageFlags.Ephemeral
-    });
-}
         // =====================================================
         // BUTTONS
         // =====================================================
