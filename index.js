@@ -51,6 +51,9 @@ const amenzi = new Map();
 const leaveRequests = new Map(); // leave request storage
 const leaveHistory = new Map(); // leave request history
 
+const seif = new Map();
+let seifMessageId = null;
+
 // ================= CONFIG =================
 
 const taskChannelId = '1494860985066848357';
@@ -58,6 +61,7 @@ const taskLogsChannelId = '1503906070010269721';
 const invoireChannelId = '1493771851485417532'; // Invoire channel where requests are posted
 const invoireLogsChannelId = '1510636374812790865'; // Logs channel for accept/decline actions
 const invoirePermissionRoleId = '1504935162092195930'; // Permission role for buttons
+const seifChannelId = '1511120983279276104';
 
 let leaveRequestIdCounter = 0;
 
@@ -65,10 +69,23 @@ const leadershipRoleIds = [
     '1493768690133499926'
 ];
 
+function buildSeifEmbed() {
+
+    const items = Array.from(seif.entries());
+
+    return new EmbedBuilder()
+        .setTitle('🏦 SEIF PRODUSE GANG')
+        .setColor('Gold')
+        .setDescription(
+            items.length
+                ? items.map(([k, v]) => `**${k}**: ${v}`).join('\n')
+                : 'Nu există produse în seif.'
+        );
+}
 // ================= READY =================
 
 client.once(Events.ClientReady, async () => {
-
+await updateSeif(client);
     console.log(`🤖 Bot pornit ca ${client.user.tag}`);
 
     const commands = [
@@ -427,7 +444,56 @@ client.on(Events.InteractionCreate, async interaction => {
     try {
 
         if (interaction.isChatInputCommand()) {
-            
+            if (interaction.customId === 'seif_add') {
+
+    const modal = new ModalBuilder()
+        .setCustomId('seif_add_modal')
+        .setTitle('➕ Adaugă produs');
+
+    const produs = new TextInputBuilder()
+        .setCustomId('produs')
+        .setLabel('Ce produs? (ex: cocaine)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true);
+
+    const cantitate = new TextInputBuilder()
+        .setCustomId('cantitate')
+        .setLabel('Cantitate')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true);
+
+    modal.addComponents(
+        new ActionRowBuilder().addComponents(produs),
+        new ActionRowBuilder().addComponents(cantitate)
+    );
+
+    return interaction.showModal(modal);
+}
+            if (interaction.customId === 'seif_remove') {
+
+    const modal = new ModalBuilder()
+        .setCustomId('seif_remove_modal')
+        .setTitle('➖ Scoate produs');
+
+    const produs = new TextInputBuilder()
+        .setCustomId('produs')
+        .setLabel('Ce produs?')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true);
+
+    const cantitate = new TextInputBuilder()
+        .setCustomId('cantitate')
+        .setLabel('Cantitate')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true);
+
+    modal.addComponents(
+        new ActionRowBuilder().addComponents(produs),
+        new ActionRowBuilder().addComponents(cantitate)
+    );
+
+    return interaction.showModal(modal);
+}
             // =====================================================
             // /CV
             // =====================================================
@@ -1348,6 +1414,38 @@ client.on(Events.InteractionCreate, async interaction => {
             }
         }
 
+            if (interaction.customId === 'seif_add_modal') {
+
+    const produs = interaction.fields.getTextInputValue('produs').toLowerCase();
+    const cantitate = parseInt(interaction.fields.getTextInputValue('cantitate'));
+
+    seif.set(produs, (seif.get(produs) || 0) + cantitate);
+
+    await updateSeif(interaction.client);
+
+    return interaction.reply({
+        content: `✅ Adăugat ${cantitate}x ${produs}`,
+        flags: MessageFlags.Ephemeral
+    });
+}
+        if (interaction.customId === 'seif_remove_modal') {
+
+    const produs = interaction.fields.getTextInputValue('produs').toLowerCase();
+    const cantitate = parseInt(interaction.fields.getTextInputValue('cantitate'));
+
+    if (!seif.has(produs)) seif.set(produs, 0);
+
+    seif.set(produs, seif.get(produs) - cantitate);
+
+    if (seif.get(produs) <= 0) seif.delete(produs);
+
+    await updateSeif(interaction.client);
+
+    return interaction.reply({
+        content: `❌ Scos ${cantitate}x ${produs}`,
+        flags: MessageFlags.Ephemeral
+    });
+}
         // =====================================================
         // BUTTONS
         // =====================================================
