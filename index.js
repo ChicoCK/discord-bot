@@ -87,7 +87,15 @@ function buildSeifEmbed() {
 client.once(Events.ClientReady, async () => {
 await updateSeif(client);
     console.log(`🤖 Bot pornit ca ${client.user.tag}`);
+console.log("🧪 SEIF START TEST");
 
+try {
+    await updateSeif(client);
+    console.log("🧪 SEIF END TEST OK");
+} catch (err) {
+    console.log("🧨 SEIF CRASH:", err);
+}
+    
     const commands = [
 
         // ================= CV =================
