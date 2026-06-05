@@ -1336,7 +1336,7 @@ client.on(Events.InteractionCreate, async interaction => {
             // /ACTIVITATE
             // =====================================================
 
-                     if (interaction.commandName === 'activitate') {
+       if (interaction.commandName === 'activitate') {
                 const modal = new ModalBuilder()
                     .setCustomId('activitate_modal')
                     .setTitle('📋 Formular Activitate Dosar');
@@ -1355,7 +1355,6 @@ client.on(Events.InteractionCreate, async interaction => {
                     .setLabel('🗂️ Tipul Activități')
                     .setStyle(TextInputStyle.Short)
                     .setRequired(true);
-                // Am combinat orele într-un singur câmp din cauza limitării la cel mult 5 input-uri în modal
                 const oreActivitate = new TextInputBuilder()
                     .setCustomId('ore_activitate')
                     .setLabel('⏱ Ore activitate (ex: 14:00-16:30)')
@@ -1406,7 +1405,7 @@ client.on(Events.InteractionCreate, async interaction => {
                 });
             }
 
- if (interaction.customId === 'activitate_modal') {
+        if (interaction.customId === 'activitate_modal') {
                 const data = {
                     userId: interaction.user.id,
                     numeResponsabil: interaction.fields.getTextInputValue('nume_responsabil'),
@@ -1420,7 +1419,7 @@ client.on(Events.InteractionCreate, async interaction => {
                     content: '📸 Trimite poza cu persoanele care participă la activitate (obligatoriu). Poza ta va fi ștearsă după trimitere.',
                     flags: MessageFlags.Ephemeral,
                 });
-        }
+            }
 
         // =====================================================
         // BUTTONS
@@ -1734,7 +1733,7 @@ client.on(Events.InteractionCreate, async interaction => {
             // BUTTON STOP ACTIVITATE
             // =====================================================
 
-                 if (interaction.customId.startsWith('stop_activitate_')) {
+  if (interaction.customId.startsWith('stop_activitate_')) {
                 const parts = interaction.customId.split('_');
                 const userId = parts[2];
                 if (interaction.user.id !== userId) {
@@ -1871,10 +1870,10 @@ client.on(Events.MessageCreate, async message => {
             return message.reply({ content: '❌ Trebuie să trimiți o poză cu participanții.', flags: MessageFlags.Ephemeral });
         }
         const attachment = message.attachments.first();
-        await message.delete().catch(() => {});
+        await message.delete().catch(() => { });
         const channel = await client.channels.fetch(activitateChannelId);
         const embed = new EmbedBuilder()
-            .setTitle('📋 Activitate Dosar RP')
+            .setTitle('📋 Activitate Dosar')
             .setColor('Blue')
             .addFields(
                 { name: '👤 Nume responsabil activitate', value: activitate.data.numeResponsabil, inline: true },
