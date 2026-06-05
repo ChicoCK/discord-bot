@@ -63,7 +63,7 @@ const invoireLogsChannelId = '1510636374812790865'; // Logs channel for accept/d
 const invoirePermissionRoleId = '1504935162092195930'; // Permission role for buttons
 
 // Canal pentru activitati (setează ID-ul canalului tău unde să apară activitățile)
-const activitateChannelId = 'ID_CANALUL_TAU_ACTIVITATI';
+const activitateChannelId = '1510810718662824047';
 
 let leaveRequestIdCounter = 0;
 
