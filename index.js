@@ -1336,57 +1336,43 @@ client.on(Events.InteractionCreate, async interaction => {
             // /ACTIVITATE
             // =====================================================
 
-            if (interaction.commandName === 'activitate') {
-
+                     if (interaction.commandName === 'activitate') {
                 const modal = new ModalBuilder()
                     .setCustomId('activitate_modal')
                     .setTitle('📋 Formular Activitate Dosar');
-
                 const numeResponsabil = new TextInputBuilder()
                     .setCustomId('nume_responsabil')
                     .setLabel('👤 Nume responsabil activitate')
                     .setStyle(TextInputStyle.Short)
                     .setRequired(true);
-
                 const nrParticipanti = new TextInputBuilder()
                     .setCustomId('nr_participanti')
                     .setLabel('👥 Număr participanți')
                     .setStyle(TextInputStyle.Short)
                     .setRequired(true);
-
                 const tipActivitate = new TextInputBuilder()
                     .setCustomId('tip_activitate')
                     .setLabel('🗂️ Tipul Activități')
                     .setStyle(TextInputStyle.Short)
                     .setRequired(true);
-
-                const oraInceput = new TextInputBuilder()
-                    .setCustomId('ora_inceput')
-                    .setLabel('⏱ Ora începerii activității (ex: 14:30)')
+                // Am combinat orele într-un singur câmp din cauza limitării la cel mult 5 input-uri în modal
+                const oreActivitate = new TextInputBuilder()
+                    .setCustomId('ore_activitate')
+                    .setLabel('⏱ Ore activitate (ex: 14:00-16:30)')
                     .setStyle(TextInputStyle.Short)
                     .setRequired(true);
-
-                const oraFinal = new TextInputBuilder()
-                    .setCustomId('ora_final')
-                    .setLabel('🛑 Ora finalizării activității (ex: 16:00)')
-                    .setStyle(TextInputStyle.Short)
-                    .setRequired(true);
-
                 const dataDesfasurare = new TextInputBuilder()
                     .setCustomId('data_desfasurare')
                     .setLabel('📅 Data desfășurării (ex: 2024-06-01)')
                     .setStyle(TextInputStyle.Short)
                     .setRequired(true);
-
                 modal.addComponents(
                     new ActionRowBuilder().addComponents(numeResponsabil),
                     new ActionRowBuilder().addComponents(nrParticipanti),
                     new ActionRowBuilder().addComponents(tipActivitate),
-                    new ActionRowBuilder().addComponents(oraInceput),
-                    new ActionRowBuilder().addComponents(oraFinal),
+                    new ActionRowBuilder().addComponents(oreActivitate),
                     new ActionRowBuilder().addComponents(dataDesfasurare),
                 );
-
                 await interaction.showModal(modal);
             }
         }
@@ -1420,27 +1406,20 @@ client.on(Events.InteractionCreate, async interaction => {
                 });
             }
 
-if (interaction.customId === 'activitate_modal') {
-    const oreActivitateVal = interaction.fields.getTextInputValue('ore_activitate');
-    // Parsează dacă vrei, ex:
-    // const [oraInceput, oraFinal] = oreActivitateVal.split('-');
-
-    const data = {
-        userId: interaction.user.id,
-        numeResponsabil: interaction.fields.getTextInputValue('nume_responsabil'),
-        nrParticipanti: interaction.fields.getTextInputValue('nr_participanti'),
-        tipActivitate: interaction.fields.getTextInputValue('tip_activitate'),
-        oreActivitate: oreActivitateVal,
-        dataDesfasurare: interaction.fields.getTextInputValue('data_desfasurare'),
-    };
-
-    activitatiMap.set(interaction.user.id, { data, awaitingPhoto: true });
-
-    return await interaction.reply({
-        content: '📸 Trimite poza cu persoanele care participă la activitate (obligatoriu). Poza ta va fi ștearsă după trimitere.',
-        flags: MessageFlags.Ephemeral,
-    });
-}
+ if (interaction.customId === 'activitate_modal') {
+                const data = {
+                    userId: interaction.user.id,
+                    numeResponsabil: interaction.fields.getTextInputValue('nume_responsabil'),
+                    nrParticipanti: interaction.fields.getTextInputValue('nr_participanti'),
+                    tipActivitate: interaction.fields.getTextInputValue('tip_activitate'),
+                    oreActivitate: interaction.fields.getTextInputValue('ore_activitate'),
+                    dataDesfasurare: interaction.fields.getTextInputValue('data_desfasurare'),
+                };
+                activitatiMap.set(interaction.user.id, { data, awaitingPhoto: true });
+                return await interaction.reply({
+                    content: '📸 Trimite poza cu persoanele care participă la activitate (obligatoriu). Poza ta va fi ștearsă după trimitere.',
+                    flags: MessageFlags.Ephemeral,
+                });
         }
 
         // =====================================================
@@ -1755,47 +1734,34 @@ if (interaction.customId === 'activitate_modal') {
             // BUTTON STOP ACTIVITATE
             // =====================================================
 
-            if (interaction.customId.startsWith('stop_activitate_')) {
-                // Extrage userId din customId : stop_activitate_userid_timestamp
+                 if (interaction.customId.startsWith('stop_activitate_')) {
                 const parts = interaction.customId.split('_');
                 const userId = parts[2];
-
                 if (interaction.user.id !== userId) {
-                    // Daca vrei, adauga permisiune suplimentara
                     return interaction.reply({ content: '❌ Nu poți opri activitatea altcuiva.', flags: MessageFlags.Ephemeral });
                 }
-
                 const activitate = activitatiMap.get(userId);
-
                 if (!activitate || activitate.awaitingPhoto) {
                     return interaction.reply({ content: '❌ Nu există activitate activă pentru tine.', flags: MessageFlags.Ephemeral });
                 }
-
-                // Actualizeaza embed-ul cu ora opririi activitatii
                 const updatedEmbed = EmbedBuilder.from(interaction.message.embeds[0])
                     .setColor('Green')
                     .addFields({ name: '🛑 Activitate oprită la', value: new Date().toLocaleString() });
-
                 const disabledButtons = new ActionRowBuilder()
                     .addComponents(
                         ButtonBuilder.from(interaction.component).setDisabled(true)
                     );
-
                 await interaction.update({
                     embeds: [updatedEmbed],
                     components: [disabledButtons]
                 });
-
-                // Sterge activitatea din map
                 activitatiMap.delete(userId);
             }
+            // ... restul butoanelor din codul tău existent
         }
-
-    } catch (err) {
-
-        console.error(err);
+    } catch (error) {
+        console.error('Eroare în InteractionCreate:', error);
     }
-
 });
 
 // ================= MESSAGE CREATE =================
@@ -1898,55 +1864,38 @@ client.on(Events.MessageCreate, async message => {
 
         // ================= ACTIVITATE POZA =================
 
-        if (!activitatiMap.has(message.author.id)) return;
-
-        const activitate = activitatiMap.get(message.author.id);
-
-        if (activitate.awaitingPhoto) {
-
-            if (message.attachments.size === 0) {
-
-                return message.reply({ content: '❌ Trebuie să trimiți o poză cu participanții.', flags: MessageFlags.Ephemeral });
-            }
-
-            const attachment = message.attachments.first();
-
-            // Sterge mesajul cu poza trimisă de utilizator
-            await message.delete().catch(() => {});
-
-            // Construiește embed-ul cu datele din formular și poza trimisă
-            const channel = await client.channels.fetch(activitateChannelId);
-
-            const embed = new EmbedBuilder()
-                .setTitle('📋 Activitate Dosar RP')
-                .setColor('Blue')
-.addFields(
-    { name: '👤 Nume responsabil activitate', value: activitate.data.numeResponsabil, inline: true },
-    { name: '👥 Număr participanți', value: activitate.data.nrParticipanti, inline: true },
-    { name: '🗂️ Tipul Activități', value: activitate.data.tipActivitate, inline: true },
-    { name: '⏱ Ore activitate', value: activitate.data.oreActivitate, inline: true },
-    { name: '📅 Data desfășurării', value: activitate.data.dataDesfasurare, inline: true },
-)
-                .setImage(attachment.url)
-                .setTimestamp();
-
-            const stopButton = new ButtonBuilder()
-                .setCustomId(`stop_activitate_${message.author.id}_${Date.now()}`)
-                .setLabel('🛑 Oprește Activitatea')
-                .setStyle(ButtonStyle.Danger);
-
-            const buttons = new ActionRowBuilder().addComponents(stopButton);
-
-            const sentMessage = await channel.send({ embeds: [embed], components: [buttons] });
-
-            // Salvează datele activității si mesajul trimis ca sa updatezi când se apasă butonul stop
-            activitate.messageId = sentMessage.id;
-            activitate.awaitingPhoto = false;
-            activitatiMap.set(message.author.id, activitate);
-
-            // Confirmă utilizatorului că activitatea a fost înregistrată
-            await message.author.send('✅ Activitatea ta a fost înregistrată și trimisă pe canalul de activități.');
+     if (!activitatiMap.has(message.author.id)) return;
+    const activitate = activitatiMap.get(message.author.id);
+    if (activitate.awaitingPhoto) {
+        if (message.attachments.size === 0) {
+            return message.reply({ content: '❌ Trebuie să trimiți o poză cu participanții.', flags: MessageFlags.Ephemeral });
         }
+        const attachment = message.attachments.first();
+        await message.delete().catch(() => {});
+        const channel = await client.channels.fetch(activitateChannelId);
+        const embed = new EmbedBuilder()
+            .setTitle('📋 Activitate Dosar RP')
+            .setColor('Blue')
+            .addFields(
+                { name: '👤 Nume responsabil activitate', value: activitate.data.numeResponsabil, inline: true },
+                { name: '👥 Număr participanți', value: activitate.data.nrParticipanti, inline: true },
+                { name: '🗂️ Tipul Activități', value: activitate.data.tipActivitate, inline: true },
+                { name: '⏱ Ore activitate', value: activitate.data.oreActivitate, inline: true },
+                { name: '📅 Data desfășurării', value: activitate.data.dataDesfasurare, inline: true },
+            )
+            .setImage(attachment.url)
+            .setTimestamp();
+        const stopButton = new ButtonBuilder()
+            .setCustomId(`stop_activitate_${message.author.id}_${Date.now()}`)
+            .setLabel('🛑 Oprește Activitatea')
+            .setStyle(ButtonStyle.Danger);
+        const buttons = new ActionRowBuilder().addComponents(stopButton);
+        const sentMessage = await channel.send({ embeds: [embed], components: [buttons] });
+        activitate.messageId = sentMessage.id;
+        activitate.awaitingPhoto = false;
+        activitatiMap.set(message.author.id, activitate);
+        await message.author.send('✅ Activitatea ta a fost înregistrată și trimisă pe canalul de activități.');
+    }
 
     } catch (err) {
 
