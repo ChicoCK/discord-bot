@@ -51,6 +51,9 @@ const amenzi = new Map();
 const leaveRequests = new Map(); // leave request storage
 const leaveHistory = new Map(); // leave request history
 
+// Storage pentru activitati complet nou
+const activitatiMap = new Map();
+
 // ================= CONFIG =================
 
 const taskChannelId = '1494860985066848357';
@@ -58,6 +61,9 @@ const taskLogsChannelId = '1503906070010269721';
 const invoireChannelId = '1493771851485417532'; // Invoire channel where requests are posted
 const invoireLogsChannelId = '1510636374812790865'; // Logs channel for accept/decline actions
 const invoirePermissionRoleId = '1504935162092195930'; // Permission role for buttons
+
+// Canal pentru activitati (setează ID-ul canalului tău unde să apară activitățile)
+const activitateChannelId = 'ID_CANALUL_TAU_ACTIVITATI';
 
 let leaveRequestIdCounter = 0;
 
@@ -183,18 +189,19 @@ client.once(Events.ClientReady, async () => {
 
         new SlashCommandBuilder()
 
-    .setName('clearamenzi')
+            .setName('clearamenzi')
 
-    .setDescription('Sterge toate amenzile unui membru')
+            .setDescription('Sterge toate amenzile unui membru')
 
-    .addUserOption(option =>
+            .addUserOption(option =>
 
-        option.setName('membru')
+                option.setName('membru')
 
-            .setDescription('Membrul')
+                    .setDescription('Membrul')
 
-            .setRequired(true)
-    ),
+                    .setRequired(true)
+            ),
+
         // ================= AMENZI =================
 
         new SlashCommandBuilder()
@@ -318,7 +325,15 @@ client.once(Events.ClientReady, async () => {
                             .setDescription('Membrul')
                             .setRequired(true)
                     )
-            )
+            ),
+
+        // ================= ACTIVITATE =================
+
+        new SlashCommandBuilder()
+
+            .setName('activitate')
+
+            .setDescription('Completeaza activitate dosar RP'),
 
     ].map(cmd => cmd.toJSON());
 
@@ -1316,10 +1331,68 @@ client.on(Events.InteractionCreate, async interaction => {
                     });
                 }
             }
+
+            // =====================================================
+            // /ACTIVITATE
+            // =====================================================
+
+            if (interaction.commandName === 'activitate') {
+
+                const modal = new ModalBuilder()
+                    .setCustomId('activitate_modal')
+                    .setTitle('📋 Formular Activitate Dosar');
+
+                const numeResponsabil = new TextInputBuilder()
+                    .setCustomId('nume_responsabil')
+                    .setLabel('👤 Nume responsabil activitate')
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(true);
+
+                const nrParticipanti = new TextInputBuilder()
+                    .setCustomId('nr_participanti')
+                    .setLabel('👥 Număr participanți')
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(true);
+
+                const tipActivitate = new TextInputBuilder()
+                    .setCustomId('tip_activitate')
+                    .setLabel('🗂️ Tipul Activități')
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(true);
+
+                const oraInceput = new TextInputBuilder()
+                    .setCustomId('ora_inceput')
+                    .setLabel('⏱ Ora începerii activității (ex: 14:30)')
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(true);
+
+                const oraFinal = new TextInputBuilder()
+                    .setCustomId('ora_final')
+                    .setLabel('🛑 Ora finalizării activității (ex: 16:00)')
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(true);
+
+                const dataDesfasurare = new TextInputBuilder()
+                    .setCustomId('data_desfasurare')
+                    .setLabel('📅 Data desfășurării (ex: 2024-06-01)')
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(true);
+
+                modal.addComponents(
+                    new ActionRowBuilder().addComponents(numeResponsabil),
+                    new ActionRowBuilder().addComponents(nrParticipanti),
+                    new ActionRowBuilder().addComponents(tipActivitate),
+                    new ActionRowBuilder().addComponents(oraInceput),
+                    new ActionRowBuilder().addComponents(oraFinal),
+                    new ActionRowBuilder().addComponents(dataDesfasurare),
+                );
+
+                await interaction.showModal(modal);
+            }
         }
 
         // =====================================================
-        // MODAL CV
+        // MODAL CV + ACTIVITATE
         // =====================================================
 
         if (interaction.isModalSubmit()) {
@@ -1344,6 +1417,27 @@ client.on(Events.InteractionCreate, async interaction => {
                     content: '📸 Acum trimite poza buletinului.',
 
                     flags: MessageFlags.Ephemeral
+                });
+            }
+
+            if (interaction.customId === 'activitate_modal') {
+                // Preluam datele din formular
+                const data = {
+                    userId: interaction.user.id,
+                    numeResponsabil: interaction.fields.getTextInputValue('nume_responsabil'),
+                    nrParticipanti: interaction.fields.getTextInputValue('nr_participanti'),
+                    tipActivitate: interaction.fields.getTextInputValue('tip_activitate'),
+                    oraInceput: interaction.fields.getTextInputValue('ora_inceput'),
+                    oraFinal: interaction.fields.getTextInputValue('ora_final'),
+                    dataDesfasurare: interaction.fields.getTextInputValue('data_desfasurare'),
+                };
+
+                // Salvam datele si asteptam poza
+                activitatiMap.set(interaction.user.id, { data, awaitingPhoto: true });
+
+                return await interaction.reply({
+                    content: '📸 Trimite poza cu persoanele care participă la activitate (obligatoriu). Poza ta va fi ștearsă după trimitere.',
+                    flags: MessageFlags.Ephemeral,
                 });
             }
         }
@@ -1599,60 +1693,100 @@ client.on(Events.InteractionCreate, async interaction => {
             const embed = interaction.message.embeds[0];
 
             if (!embed || !embed.footer || !embed.footer.text.includes('USER ID')) {
-                return;
-            }
-
-            const userId = embed.footer.text.replace(
-                'USER ID: ',
-                ''
-            );
-
-            const member = await interaction.guild.members.fetch(userId);
-
-            // ACCEPT
-
-            if (interaction.customId === 'accept_cv') {
-
-                await member.roles.add(acceptedRoleIds);
-
-                await member.send(
-                    '✅ Aplicatia ta a fost ACCEPTATA.'
-                ).catch(() => {});
-
-                const logChannel = await client.channels.fetch(logChannelId);
-
-                await logChannel.send(
-                    `📢 Supervizorul ${interaction.user.tag} a ACCEPTAT CV-ul lui <@${userId}> !`
+                // Nu facem nimic daca embed-ul nu e de CV
+                // Dar continuăm pentru activitate
+            } else {
+                const userId = embed.footer.text.replace(
+                    'USER ID: ',
+                    ''
                 );
 
-                return await interaction.reply({
+                const member = await interaction.guild.members.fetch(userId);
 
-                    content: '✅ CV acceptat.',
+                // ACCEPT
 
-                    flags: MessageFlags.Ephemeral
-                });
+                if (interaction.customId === 'accept_cv') {
+
+                    await member.roles.add(acceptedRoleIds);
+
+                    await member.send(
+                        '✅ Aplicatia ta a fost ACCEPTATA.'
+                    ).catch(() => {});
+
+                    const logChannel = await client.channels.fetch(logChannelId);
+
+                    await logChannel.send(
+                        `📢 Supervizorul ${interaction.user.tag} a ACCEPTAT CV-ul lui <@${userId}> !`
+                    );
+
+                    return await interaction.reply({
+
+                        content: '✅ CV acceptat.',
+
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+
+                // DECLINE
+
+                if (interaction.customId === 'decline_cv') {
+
+                    await member.send(
+                        '❌ Aplicatia ta a fost RESPINSA.'
+                    ).catch(() => {});
+
+                    const logChannel = await client.channels.fetch(logChannelId);
+
+                    await logChannel.send(
+                        `📢 Supervizorul ${interaction.user.tag} a RESPINS CV-ul lui <@${userId}> !`
+                    );
+
+                    return await interaction.reply({
+
+                        content: '❌ CV respins.',
+
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
             }
 
-            // DECLINE
+            // =====================================================
+            // BUTTON STOP ACTIVITATE
+            // =====================================================
 
-            if (interaction.customId === 'decline_cv') {
+            if (interaction.customId.startsWith('stop_activitate_')) {
+                // Extrage userId din customId : stop_activitate_userid_timestamp
+                const parts = interaction.customId.split('_');
+                const userId = parts[2];
 
-                await member.send(
-                    '❌ Aplicatia ta a fost RESPINSA.'
-                ).catch(() => {});
+                if (interaction.user.id !== userId) {
+                    // Daca vrei, adauga permisiune suplimentara
+                    return interaction.reply({ content: '❌ Nu poți opri activitatea altcuiva.', flags: MessageFlags.Ephemeral });
+                }
 
-                const logChannel = await client.channels.fetch(logChannelId);
+                const activitate = activitatiMap.get(userId);
 
-                await logChannel.send(
-                    `📢 Supervizorul ${interaction.user.tag} a RESPINS CV-ul lui <@${userId}> !`
-                );
+                if (!activitate || activitate.awaitingPhoto) {
+                    return interaction.reply({ content: '❌ Nu există activitate activă pentru tine.', flags: MessageFlags.Ephemeral });
+                }
 
-                return await interaction.reply({
+                // Actualizeaza embed-ul cu ora opririi activitatii
+                const updatedEmbed = EmbedBuilder.from(interaction.message.embeds[0])
+                    .setColor('Green')
+                    .addFields({ name: '🛑 Activitate oprită la', value: new Date().toLocaleString() });
 
-                    content: '❌ CV respins.',
+                const disabledButtons = new ActionRowBuilder()
+                    .addComponents(
+                        ButtonBuilder.from(interaction.component).setDisabled(true)
+                    );
 
-                    flags: MessageFlags.Ephemeral
+                await interaction.update({
+                    embeds: [updatedEmbed],
+                    components: [disabledButtons]
                 });
+
+                // Sterge activitatea din map
+                activitatiMap.delete(userId);
             }
         }
 
@@ -1671,91 +1805,148 @@ client.on(Events.MessageCreate, async message => {
 
         if (message.author.bot) return;
 
-        if (!applications.has(message.author.id)) return;
+        // ================= CV Poza =================
 
-        if (message.attachments.size === 0) {
+        if (applications.has(message.author.id)) {
 
-            return;
-        }
+            if (message.attachments.size === 0) {
 
-        const data = applications.get(message.author.id);
+                return;
+            }
 
-        applications.delete(message.author.id);
+            const data = applications.get(message.author.id);
 
-        const attachment = message.attachments.first();
+            applications.delete(message.author.id);
 
-        const logChannel = await client.channels.fetch(
-            logChannelId
-        );
+            const attachment = message.attachments.first();
 
-        const embed = new EmbedBuilder()
-
-            .setTitle('📋 CV NOU')
-
-            .setColor('Red')
-
-            .addFields(
-
-                { name: '👤 Nume', value: data.nume },
-
-                { name: '🆔 CNP / ID', value: data.cnp },
-
-                { name: '📅 Luni', value: data.luni },
-
-                { name: '👨‍💼 Angajator', value: data.angajator },
-
-                { name: '📱 Telefon', value: data.telefon }
-            )
-
-            .setImage('attachment://buletin.png')
-
-            .setFooter({
-
-                text: `USER ID: ${message.author.id}`
-            });
-
-        const buttons = new ActionRowBuilder()
-
-            .addComponents(
-
-                new ButtonBuilder()
-
-                    .setCustomId('accept_cv')
-
-                    .setLabel('ACCEPT')
-
-                    .setStyle(ButtonStyle.Success),
-
-                new ButtonBuilder()
-
-                    .setCustomId('decline_cv')
-
-                    .setLabel('DECLINE')
-
-                    .setStyle(ButtonStyle.Danger)
+            const logChannel = await client.channels.fetch(
+                logChannelId
             );
 
-        await logChannel.send({
+            const embed = new EmbedBuilder()
 
-            embeds: [embed],
+                .setTitle('📋 CV NOU')
 
-            components: [buttons],
+                .setColor('Red')
 
-            files: [
+                .addFields(
 
-                {
-                    attachment: attachment.url,
+                    { name: '👤 Nume', value: data.nume },
 
-                    name: 'buletin.png'
-                }
-            ]
-        });
+                    { name: '🆔 CNP / ID', value: data.cnp },
 
-        await message.delete().catch(() => {});
+                    { name: '📅 Luni', value: data.luni },
 
-        await message.author.send(
-            '✅ CV-ul tau a fost trimis spre verificare.'
-        ).catch(() => {});
+                    { name: '👨‍💼 Angajator', value: data.angajator },
+
+                    { name: '📱 Telefon', value: data.telefon }
+                )
+
+                .setImage('attachment://buletin.png')
+
+                .setFooter({
+
+                    text: `USER ID: ${message.author.id}`
+                });
+
+            const buttons = new ActionRowBuilder()
+
+                .addComponents(
+
+                    new ButtonBuilder()
+
+                        .setCustomId('accept_cv')
+
+                        .setLabel('ACCEPT')
+
+                        .setStyle(ButtonStyle.Success),
+
+                    new ButtonBuilder()
+
+                        .setCustomId('decline_cv')
+
+                        .setLabel('DECLINE')
+
+                        .setStyle(ButtonStyle.Danger)
+                );
+
+            await logChannel.send({
+
+                embeds: [embed],
+
+                components: [buttons],
+
+                files: [
+
+                    {
+                        attachment: attachment.url,
+
+                        name: 'buletin.png'
+                    }
+                ]
+            });
+
+            await message.delete().catch(() => {});
+
+            await message.author.send(
+                '✅ CV-ul tau a fost trimis spre verificare.'
+            ).catch(() => {});
+
+        }
+
+        // ================= ACTIVITATE POZA =================
+
+        if (!activitatiMap.has(message.author.id)) return;
+
+        const activitate = activitatiMap.get(message.author.id);
+
+        if (activitate.awaitingPhoto) {
+
+            if (message.attachments.size === 0) {
+
+                return message.reply({ content: '❌ Trebuie să trimiți o poză cu participanții.', flags: MessageFlags.Ephemeral });
+            }
+
+            const attachment = message.attachments.first();
+
+            // Sterge mesajul cu poza trimisă de utilizator
+            await message.delete().catch(() => {});
+
+            // Construiește embed-ul cu datele din formular și poza trimisă
+            const channel = await client.channels.fetch(activitateChannelId);
+
+            const embed = new EmbedBuilder()
+                .setTitle('📋 Activitate Dosar RP')
+                .setColor('Blue')
+                .addFields(
+                    { name: '👤 Nume responsabil activitate', value: activitate.data.numeResponsabil, inline: true },
+                    { name: '👥 Număr participanți', value: activitate.data.nrParticipanti, inline: true },
+                    { name: '🗂️ Tipul Activități', value: activitate.data.tipActivitate, inline: true },
+                    { name: '⏱ Ora începerii activității', value: activitate.data.oraInceput, inline: true },
+                    { name: '🛑 Ora finalizării activității', value: activitate.data.oraFinal, inline: true },
+                    { name: '📅 Data desfășurării', value: activitate.data.dataDesfasurare, inline: true },
+                )
+                .setImage(attachment.url)
+                .setTimestamp();
+
+            const stopButton = new ButtonBuilder()
+                .setCustomId(`stop_activitate_${message.author.id}_${Date.now()}`)
+                .setLabel('🛑 Oprește Activitatea')
+                .setStyle(ButtonStyle.Danger);
+
+            const buttons = new ActionRowBuilder().addComponents(stopButton);
+
+            const sentMessage = await channel.send({ embeds: [embed], components: [buttons] });
+
+            // Salvează datele activității si mesajul trimis ca sa updatezi când se apasă butonul stop
+            activitate.messageId = sentMessage.id;
+            activitate.awaitingPhoto = false;
+            activitatiMap.set(message.author.id, activitate);
+
+            // Confirmă utilizatorului că activitatea a fost înregistrată
+            await message.author.send('✅ Activitatea ta a fost înregistrată și trimisă pe canalul de activități.');
+        }
 
     } catch (err) {
 
