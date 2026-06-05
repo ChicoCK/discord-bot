@@ -1420,26 +1420,27 @@ client.on(Events.InteractionCreate, async interaction => {
                 });
             }
 
-            if (interaction.customId === 'activitate_modal') {
-                // Preluam datele din formular
-                const data = {
-                    userId: interaction.user.id,
-                    numeResponsabil: interaction.fields.getTextInputValue('nume_responsabil'),
-                    nrParticipanti: interaction.fields.getTextInputValue('nr_participanti'),
-                    tipActivitate: interaction.fields.getTextInputValue('tip_activitate'),
-                    oraInceput: interaction.fields.getTextInputValue('ora_inceput'),
-                    oraFinal: interaction.fields.getTextInputValue('ora_final'),
-                    dataDesfasurare: interaction.fields.getTextInputValue('data_desfasurare'),
-                };
+if (interaction.customId === 'activitate_modal') {
+    const oreActivitateVal = interaction.fields.getTextInputValue('ore_activitate');
+    // Parsează dacă vrei, ex:
+    // const [oraInceput, oraFinal] = oreActivitateVal.split('-');
 
-                // Salvam datele si asteptam poza
-                activitatiMap.set(interaction.user.id, { data, awaitingPhoto: true });
+    const data = {
+        userId: interaction.user.id,
+        numeResponsabil: interaction.fields.getTextInputValue('nume_responsabil'),
+        nrParticipanti: interaction.fields.getTextInputValue('nr_participanti'),
+        tipActivitate: interaction.fields.getTextInputValue('tip_activitate'),
+        oreActivitate: oreActivitateVal,
+        dataDesfasurare: interaction.fields.getTextInputValue('data_desfasurare'),
+    };
 
-                return await interaction.reply({
-                    content: '📸 Trimite poza cu persoanele care participă la activitate (obligatoriu). Poza ta va fi ștearsă după trimitere.',
-                    flags: MessageFlags.Ephemeral,
-                });
-            }
+    activitatiMap.set(interaction.user.id, { data, awaitingPhoto: true });
+
+    return await interaction.reply({
+        content: '📸 Trimite poza cu persoanele care participă la activitate (obligatoriu). Poza ta va fi ștearsă după trimitere.',
+        flags: MessageFlags.Ephemeral,
+    });
+}
         }
 
         // =====================================================
@@ -1919,14 +1920,13 @@ client.on(Events.MessageCreate, async message => {
             const embed = new EmbedBuilder()
                 .setTitle('📋 Activitate Dosar RP')
                 .setColor('Blue')
-                .addFields(
-                    { name: '👤 Nume responsabil activitate', value: activitate.data.numeResponsabil, inline: true },
-                    { name: '👥 Număr participanți', value: activitate.data.nrParticipanti, inline: true },
-                    { name: '🗂️ Tipul Activități', value: activitate.data.tipActivitate, inline: true },
-                    { name: '⏱ Ora începerii activității', value: activitate.data.oraInceput, inline: true },
-                    { name: '🛑 Ora finalizării activității', value: activitate.data.oraFinal, inline: true },
-                    { name: '📅 Data desfășurării', value: activitate.data.dataDesfasurare, inline: true },
-                )
+.addFields(
+    { name: '👤 Nume responsabil activitate', value: activitate.data.numeResponsabil, inline: true },
+    { name: '👥 Număr participanți', value: activitate.data.nrParticipanti, inline: true },
+    { name: '🗂️ Tipul Activități', value: activitate.data.tipActivitate, inline: true },
+    { name: '⏱ Ore activitate', value: activitate.data.oreActivitate, inline: true },
+    { name: '📅 Data desfășurării', value: activitate.data.dataDesfasurare, inline: true },
+)
                 .setImage(attachment.url)
                 .setTimestamp();
 
