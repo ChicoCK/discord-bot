@@ -54,7 +54,7 @@ let invoireCounter = 1;
 
 const taskChannelId = '1494860985066848357';
 const taskLogsChannelId = '1503906070010269721';
-const invoireLogsChannelId = '1510636374812790865';
+const invoireLogsChannelId = '1493771851485417532';
 
 const leadershipRoleIds = [
     '1493768690133499926',
