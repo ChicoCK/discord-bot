@@ -48,10 +48,13 @@ const tasks = new Map();
 const warns = new Map();
 const amenzi = new Map();
 
+const invoiri = new Map();
+let invoireCounter = 1;
 // ================= CONFIG TASK =================
 
 const taskChannelId = '1494860985066848357';
 const taskLogsChannelId = '1503906070010269721';
+const invoireLogsChannelId = '1510636374812790865';
 
 const leadershipRoleIds = [
     '1493768690133499926',
@@ -238,6 +241,12 @@ client.once(Events.ClientReady, async () => {
                     .setRequired(true)
             ),
 
+        // ================= INVOIRE =================
+
+new SlashCommandBuilder()
+    .setName('invoire')
+    .setDescription('Trimite o cerere de invoire')
+        
         // ================= PROFIL =================
 
         new SlashCommandBuilder()
@@ -848,6 +857,34 @@ client.on(Events.InteractionCreate, async interaction => {
                 });
             }
 
+       // /INVOIRE
+
+            if (interaction.commandName === 'invoire') {
+
+    const modal = new ModalBuilder()
+        .setCustomId('invoire_modal')
+        .setTitle('Cerere de Invoire');
+
+    const zile = new TextInputBuilder()
+        .setCustomId('zile')
+        .setLabel('Cate zile?')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true);
+
+    const motiv = new TextInputBuilder()
+        .setCustomId('motiv')
+        .setLabel('Motiv')
+        .setStyle(TextInputStyle.Paragraph)
+        .setRequired(true);
+
+    modal.addComponents(
+        new ActionRowBuilder().addComponents(zile),
+        new ActionRowBuilder().addComponents(motiv)
+    );
+
+    return interaction.showModal(modal);
+}
+            
             // =====================================================
             // /PROFIL
             // =====================================================
@@ -934,6 +971,98 @@ client.on(Events.InteractionCreate, async interaction => {
             }
         }
 
+if (interaction.customId === 'invoire_modal') {
+
+    const zile = parseInt(
+        interaction.fields.getTextInputValue('zile')
+    );
+
+    const motiv =
+        interaction.fields.getTextInputValue('motiv');
+
+    const startDate = new Date();
+
+    const endDate = new Date();
+
+    endDate.setDate(endDate.getDate() + zile);
+
+    const id = invoireCounter++;
+
+    invoiri.set(id.toString(), {
+        userId: interaction.user.id,
+        zile,
+        motiv
+    });
+
+    const embed = new EmbedBuilder()
+        .setColor('Green')
+        .setTitle('📋 CERERE DE CONCEDIU NOUA')
+        .addFields(
+            {
+                name: '🆔 ID',
+                value: `#${id}`
+            },
+            {
+                name: '👤 Membru',
+                value: `<@${interaction.user.id}>`
+            },
+            {
+                name: '📅 Zile Solicitate',
+                value: `${zile}`
+            },
+            {
+                name: '📝 Motiv',
+                value: motiv
+            },
+            {
+                name: '🚀 Data Inceput',
+                value: startDate.toLocaleDateString('ro-RO')
+            },
+            {
+                name: '🏁 Data Sfarsit',
+                value: endDate.toLocaleDateString('ro-RO')
+            },
+            {
+                name: '📌 Status',
+                value: '🟨 PENDING'
+            }
+        )
+        .setThumbnail(
+            interaction.user.displayAvatarURL()
+        )
+        .setFooter({
+            text: `User ID: ${interaction.user.id}`
+        });
+
+    const buttons = new ActionRowBuilder()
+        .addComponents(
+            new ButtonBuilder()
+                .setCustomId(`accept_invoire_${id}`)
+                .setLabel('Aproba')
+                .setStyle(ButtonStyle.Success),
+
+            new ButtonBuilder()
+                .setCustomId(`reject_invoire_${id}`)
+                .setLabel('Respinge')
+                .setStyle(ButtonStyle.Danger)
+        );
+
+    const logChannel =
+        await client.channels.fetch(
+            invoireLogsChannelId
+        );
+
+    await logChannel.send({
+        embeds: [embed],
+        components: [buttons]
+    });
+
+    return interaction.reply({
+        content: '✅ Cererea de invoire a fost trimisa.',
+        flags: MessageFlags.Ephemeral
+    });
+}
+        
         // =====================================================
         // BUTTONS
         // =====================================================
@@ -1020,6 +1149,124 @@ client.on(Events.InteractionCreate, async interaction => {
                 return;
             }
 
+ // INVOIRE
+
+            if (
+    interaction.customId.startsWith('accept_invoire_')
+) {
+
+    const embed =
+        EmbedBuilder.from(
+            interaction.message.embeds[0]
+        );
+
+    embed.spliceFields(6, 1, {
+        name: '📌 Status',
+        value: '✅ ACCEPTED'
+    });
+
+    await interaction.update({
+        embeds: [embed],
+        components: []
+    });
+
+    const userId =
+        embed.footer.text.replace(
+            'User ID: ',
+            ''
+        );
+
+    const logChannel =
+        await client.channels.fetch(
+            invoireLogsChannelId
+        );
+
+    await logChannel.send({
+        embeds: [
+            new EmbedBuilder()
+                .setColor('Green')
+                .setTitle('✅ INVOIRE APROBATA')
+                .setDescription(
+                    `📢 Supervizorul ${interaction.user.tag} a ACCEPTAT invoirea lui <@${userId}>`
+                )
+                .addFields(
+                    {
+                        name: '🆔 ID Cerere',
+                        value: embed.fields[0].value
+                    },
+                    {
+                        name: '👤 Membru',
+                        value: `<@${userId}>`
+                    },
+                    {
+                        name: '🛡️ Aprobata de',
+                        value: interaction.user.tag
+                    }
+                )
+        ]
+    });
+
+    return;
+}
+
+if (
+    interaction.customId.startsWith('reject_invoire_')
+) {
+
+    const embed =
+        EmbedBuilder.from(
+            interaction.message.embeds[0]
+        );
+
+    embed.spliceFields(6, 1, {
+        name: '📌 Status',
+        value: '❌ RESPINSA'
+    });
+
+    await interaction.update({
+        embeds: [embed],
+        components: []
+    });
+
+    const userId =
+        embed.footer.text.replace(
+            'User ID: ',
+            ''
+        );
+
+    const logChannel =
+        await client.channels.fetch(
+            invoireLogsChannelId
+        );
+
+    await logChannel.send({
+        embeds: [
+            new EmbedBuilder()
+                .setColor('Red')
+                .setTitle('❌ INVOIRE RESPINSA')
+                .setDescription(
+                    `📢 Supervizorul ${interaction.user.tag} a RESPINS invoirea lui <@${userId}>`
+                )
+                .addFields(
+                    {
+                        name: '🆔 ID Cerere',
+                        value: embed.fields[0].value
+                    },
+                    {
+                        name: '👤 Membru',
+                        value: `<@${userId}>`
+                    },
+                    {
+                        name: '🛡️ Respinsa de',
+                        value: interaction.user.tag
+                    }
+                )
+        ]
+    });
+
+    return;
+}
+            
             // =====================================================
             // CV BUTTONS
             // =====================================================
