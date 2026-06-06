@@ -245,7 +245,7 @@ client.once(Events.ClientReady, async () => {
 
 new SlashCommandBuilder()
     .setName('invoire')
-    .setDescription('Trimite o cerere de invoire')
+    .setDescription('Trimite o cerere de invoire'),
         
         // ================= PROFIL =================
 
@@ -945,122 +945,126 @@ client.on(Events.InteractionCreate, async interaction => {
         // MODAL CV
         // =====================================================
 
-        if (interaction.isModalSubmit()) {
+if (interaction.isModalSubmit()) {
 
-            if (interaction.customId === 'cv_modal') {
+    // ================= CV MODAL =================
 
-                applications.set(interaction.user.id, {
+    if (interaction.customId === 'cv_modal') {
 
-                    nume: interaction.fields.getTextInputValue('nume'),
+        applications.set(interaction.user.id, {
 
-                    cnp: interaction.fields.getTextInputValue('cnp'),
+            nume: interaction.fields.getTextInputValue('nume'),
 
-                    luni: interaction.fields.getTextInputValue('luni'),
+            cnp: interaction.fields.getTextInputValue('cnp'),
 
-                    angajator: interaction.fields.getTextInputValue('angajator'),
+            luni: interaction.fields.getTextInputValue('luni'),
 
-                    telefon: interaction.fields.getTextInputValue('telefon')
-                });
+            angajator: interaction.fields.getTextInputValue('angajator'),
 
-                return await interaction.reply({
-
-                    content: '📸 Acum trimite poza buletinului.',
-
-                    flags: MessageFlags.Ephemeral
-                });
-            }
-        }
-
-if (interaction.customId === 'invoire_modal') {
-
-    const zile = parseInt(
-        interaction.fields.getTextInputValue('zile')
-    );
-
-    const motiv =
-        interaction.fields.getTextInputValue('motiv');
-
-    const startDate = new Date();
-
-    const endDate = new Date();
-
-    endDate.setDate(endDate.getDate() + zile);
-
-    const id = invoireCounter++;
-
-    invoiri.set(id.toString(), {
-        userId: interaction.user.id,
-        zile,
-        motiv
-    });
-
-    const embed = new EmbedBuilder()
-        .setColor('Green')
-        .setTitle('📋 CERERE DE CONCEDIU NOUA')
-        .addFields(
-            {
-                name: '🆔 ID',
-                value: `#${id}`
-            },
-            {
-                name: '👤 Membru',
-                value: `<@${interaction.user.id}>`
-            },
-            {
-                name: '📅 Zile Solicitate',
-                value: `${zile}`
-            },
-            {
-                name: '📝 Motiv',
-                value: motiv
-            },
-            {
-                name: '🚀 Data Inceput',
-                value: startDate.toLocaleDateString('ro-RO')
-            },
-            {
-                name: '🏁 Data Sfarsit',
-                value: endDate.toLocaleDateString('ro-RO')
-            },
-            {
-                name: '📌 Status',
-                value: '🟨 PENDING'
-            }
-        )
-        .setThumbnail(
-            interaction.user.displayAvatarURL()
-        )
-        .setFooter({
-            text: `User ID: ${interaction.user.id}`
+            telefon: interaction.fields.getTextInputValue('telefon')
         });
 
-    const buttons = new ActionRowBuilder()
-        .addComponents(
-            new ButtonBuilder()
-                .setCustomId(`accept_invoire_${id}`)
-                .setLabel('Aproba')
-                .setStyle(ButtonStyle.Success),
+        return await interaction.reply({
 
-            new ButtonBuilder()
-                .setCustomId(`reject_invoire_${id}`)
-                .setLabel('Respinge')
-                .setStyle(ButtonStyle.Danger)
+            content: '📸 Acum trimite poza buletinului.',
+
+            flags: MessageFlags.Ephemeral
+        });
+    }
+
+    // ================= INVOIRE MODAL =================
+
+    if (interaction.customId === 'invoire_modal') {
+
+        const zile = parseInt(
+            interaction.fields.getTextInputValue('zile')
         );
 
-    const logChannel =
-        await client.channels.fetch(
-            invoireLogsChannelId
-        );
+        const motiv =
+            interaction.fields.getTextInputValue('motiv');
 
-    await logChannel.send({
-        embeds: [embed],
-        components: [buttons]
-    });
+        const startDate = new Date();
 
-    return interaction.reply({
-        content: '✅ Cererea de invoire a fost trimisa.',
-        flags: MessageFlags.Ephemeral
-    });
+        const endDate = new Date();
+
+        endDate.setDate(endDate.getDate() + zile);
+
+        const id = invoireCounter++;
+
+        invoiri.set(id.toString(), {
+            userId: interaction.user.id,
+            zile,
+            motiv
+        });
+
+        const embed = new EmbedBuilder()
+            .setColor('Green')
+            .setTitle('📋 CERERE DE CONCEDIU NOUA')
+            .addFields(
+                {
+                    name: '🆔 ID',
+                    value: `#${id}`
+                },
+                {
+                    name: '👤 Membru',
+                    value: `<@${interaction.user.id}>`
+                },
+                {
+                    name: '📅 Zile Solicitate',
+                    value: `${zile}`
+                },
+                {
+                    name: '📝 Motiv',
+                    value: motiv
+                },
+                {
+                    name: '🚀 Data Inceput',
+                    value: startDate.toLocaleDateString('ro-RO')
+                },
+                {
+                    name: '🏁 Data Sfarsit',
+                    value: endDate.toLocaleDateString('ro-RO')
+                },
+                {
+                    name: '📌 Status',
+                    value: '🟨 PENDING'
+                }
+            )
+            .setThumbnail(
+                interaction.user.displayAvatarURL()
+            )
+            .setFooter({
+                text: `User ID: ${interaction.user.id}`
+            });
+
+        const buttons = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`accept_invoire_${id}`)
+                    .setLabel('Aproba')
+                    .setStyle(ButtonStyle.Success),
+
+                new ButtonBuilder()
+                    .setCustomId(`reject_invoire_${id}`)
+                    .setLabel('Respinge')
+                    .setStyle(ButtonStyle.Danger)
+            );
+
+        const logChannel =
+            await client.channels.fetch(
+                invoireLogsChannelId
+            );
+
+        await logChannel.send({
+            embeds: [embed],
+            components: [buttons]
+        });
+
+        return interaction.reply({
+            content: '✅ Cererea de invoire a fost trimisa.',
+            flags: MessageFlags.Ephemeral
+        });
+    }
 }
         
         // =====================================================
