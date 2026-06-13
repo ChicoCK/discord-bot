@@ -61,6 +61,8 @@ const leadershipRoleIds = [
     '1504935162092195930'
 ];
 
+const invoireManagerRoleId = '1503084616695681064';
+
 // ================= READY =================
 
 client.once(Events.ClientReady, async () => {
@@ -1159,6 +1161,18 @@ if (interaction.isModalSubmit()) {
     interaction.customId.startsWith('accept_invoire_')
 ) {
 
+const hasPermission =
+    interaction.member.roles.cache.has(
+        invoireManagerRoleId
+    );
+
+if (!hasPermission) {
+    return interaction.reply({
+        content: '❌ Nu ai permisiunea sa aprobi invoiri.',
+        flags: MessageFlags.Ephemeral
+    });
+}                
+                
     const embed =
         EmbedBuilder.from(
             interaction.message.embeds[0]
@@ -1216,6 +1230,18 @@ if (interaction.isModalSubmit()) {
 if (
     interaction.customId.startsWith('reject_invoire_')
 ) {
+
+    const hasPermission =
+    interaction.member.roles.cache.has(
+        invoireManagerRoleId
+    );
+
+if (!hasPermission) {
+    return interaction.reply({
+        content: '❌ Nu ai permisiunea sa respingi invoiri.',
+        flags: MessageFlags.Ephemeral
+    });
+}
 
     const embed =
         EmbedBuilder.from(
