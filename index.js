@@ -1079,50 +1079,92 @@ if (interaction.isModalSubmit()) {
             // TASK BUTTON
             // =====================================================
 
-await interaction.update({
+if (interaction.customId.startsWith('task_done_')) {
 
-    embeds: [updatedEmbed],
+    // Doar managementul poate accepta task-ul
+    const hasPermission = interaction.member.roles.cache.has(
+        '1504935162092195930'
+    );
 
-    components: [disabledButtons]
-});
+    if (!hasPermission) {
 
-// Obtinem membrul din server
-const taskMember = await interaction.guild.members.fetch(mentionedUserId);
+        return interaction.reply({
+            content: '❌ Nu ai permisiunea sa preiei acest task.',
+            flags: MessageFlags.Ephemeral
+        });
+    }
 
-// ID-urile rolurilor care vor fi scoase
-const removeRoles = [
-    '1495171407615754321',
-    '1495171483838709802'
-];
+    const embed = interaction.message.embeds[0];
 
-// ID-urile rolurilor care vor fi adaugate
-const addRoles = [
-    '1493795104950059139',
-    '1494013913942065182'
-];
+    const membruField = embed.fields.find(
+        field => field.name === '👤 Membru'
+    );
 
-try {
+    if (!membruField) {
 
-    // Scoate rolurile vechi
-    await taskMember.roles.remove(removeRoles);
+        return interaction.reply({
+            content: '❌ Task invalid.',
+            flags: MessageFlags.Ephemeral
+        });
+    }
 
-    // Adauga rolurile noi
-    await taskMember.roles.add(addRoles);
+    const mentionedUserId = membruField.value.replace(/[<@!>]/g, '');
 
-} catch (error) {
+    const updatedEmbed = EmbedBuilder.from(embed)
 
-    console.error('Eroare la schimbarea rolurilor:', error);
+        .setColor('Green')
+
+        .spliceFields(3, 1, {
+            name: '📌 Status',
+            value: `✅ FINALIZAT de ${interaction.user}`
+        });
+
+    const disabledButtons = new ActionRowBuilder()
+
+        .addComponents(
+            ButtonBuilder.from(interaction.component)
+                .setDisabled(true)
+        );
+
+    await interaction.update({
+        embeds: [updatedEmbed],
+        components: [disabledButtons]
+    });
+
+    try {
+
+        const taskMember =
+            await interaction.guild.members.fetch(
+                mentionedUserId
+            );
+
+        // Roluri scoase
+        await taskMember.roles.remove([
+            '1495171407615754321',
+            '1495171483838709802'
+        ]);
+
+        // Roluri adaugate
+        await taskMember.roles.add([
+            '1493795104950059139',
+            '1494013913942065182'
+        ]);
+
+    } catch (error) {
+
+        console.error('Eroare la schimbarea rolurilor:', error);
+    }
+
+    const logsChannel = await client.channels.fetch(
+        taskLogsChannelId
+    );
+
+    await logsChannel.send(
+        `📢 ${interaction.user} a preluat task-ul lui <@${mentionedUserId}>.`
+    );
+
+    return;
 }
-
-const logsChannel = await client.channels.fetch(
-    taskLogsChannelId
-);
-
-await logsChannel.send(
-    `📢 <@${mentionedUserId}> a finalizat task-ul si i-au fost actualizate rolurile.`
-);
-
-return;
 
  // INVOIRE
 
