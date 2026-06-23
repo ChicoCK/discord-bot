@@ -1125,11 +1125,19 @@ if (interaction.customId.startsWith('task_done_')) {
     try {
         const taskMember = await interaction.guild.members.fetch(mentionedUserId);
 
-        // ✅ FIX REAL: set() înlocuiește TOT setul de roluri
-        await taskMember.roles.set([
+        const removeRoles = [
+            '1495171407615754321',
+            '1495171483838709802'
+        ];
+
+        const addRoles = [
             '1493795104950059139',
             '1494013913942065182'
-        ]);
+        ];
+
+        // ❗ IMPORTANT: așteptăm fiecare operațiune corect
+        await taskMember.roles.remove(removeRoles);
+        await taskMember.roles.add(addRoles);
 
     } catch (error) {
         console.error('Eroare la schimbarea rolurilor:', error);
