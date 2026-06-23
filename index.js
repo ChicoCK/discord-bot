@@ -1079,81 +1079,48 @@ if (interaction.isModalSubmit()) {
             // TASK BUTTON
             // =====================================================
 
-            if (interaction.customId.startsWith('task_done_')) {
+await interaction.update({
 
-                const embed = interaction.message.embeds[0];
+    embeds: [updatedEmbed],
 
-                const membruField = embed.fields.find(
-                    field => field.name === '👤 Membru'
-                );
+    components: [disabledButtons]
+});
 
-                if (!membruField) {
+// Obtinem membrul din server
+const member = await interaction.guild.members.fetch(mentionedUserId);
 
-                    return interaction.reply({
+// ID-urile rolurilor care vor fi scoase
+const removeRoles = [
+    '1495171407615754321',
+    '1495171483838709802'
+];
 
-                        content: '❌ Task invalid.',
+// ID-urile rolurilor care vor fi adaugate
+const addRoles = [
+    '1493795104950059139',
+    '1494013913942065182'
+];
 
-                        flags: MessageFlags.Ephemeral
-                    });
-                }
+try {
 
-                const mentionedUserId = membruField.value.replace(/[<@!>]/g, '');
+    await member.roles.remove(removeRoles);
 
-                const isOwner = interaction.user.id === mentionedUserId;
+    await member.roles.add(addRoles);
 
-                const isLeadership = interaction.member.roles.cache.some(role =>
-                    leadershipRoleIds.includes(role.id)
-                );
+} catch (error) {
 
-                if (!isOwner && !isLeadership) {
+    console.error('Eroare la schimbarea rolurilor:', error);
+}
 
-                    return interaction.reply({
+const logsChannel = await client.channels.fetch(
+    taskLogsChannelId
+);
 
-                        content: '❌ Nu ai permisiune sa folosesti acest buton.',
+await logsChannel.send(
+    `📢 <@${mentionedUserId}> este pregatit pentru predarea task-ului.`
+);
 
-                        flags: MessageFlags.Ephemeral
-                    });
-                }
-
-                const updatedEmbed = EmbedBuilder.from(
-                    interaction.message.embeds[0]
-                )
-
-                    .setColor('Green')
-
-                    .spliceFields(3, 1, {
-
-                        name: '📌 Status',
-
-                        value: '✅ FINALIZAT'
-                    });
-
-                const disabledButtons = new ActionRowBuilder()
-
-                    .addComponents(
-
-                        ButtonBuilder.from(interaction.component)
-
-                            .setDisabled(true)
-                    );
-
-                await interaction.update({
-
-                    embeds: [updatedEmbed],
-
-                    components: [disabledButtons]
-                });
-
-                const logsChannel = await client.channels.fetch(
-                    taskLogsChannelId
-                );
-
-                await logsChannel.send(
-                    `📢 <@${mentionedUserId}> este pregatit pentru predarea task-ului.`
-                );
-
-                return;
-            }
+return;
 
  // INVOIRE
 
