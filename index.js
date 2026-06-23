@@ -1135,9 +1135,20 @@ if (interaction.customId.startsWith('task_done_')) {
             '1494013913942065182'
         ];
 
-        // ❗ IMPORTANT: așteptăm fiecare operațiune corect
-        await taskMember.roles.remove(removeRoles);
-        await taskMember.roles.add(addRoles);
+        console.log("BEFORE:", taskMember.roles.cache.map(r => r.id));
+
+        // 🔴 PAS 1: REMOVE cu verificare
+        const removed = await taskMember.roles.remove(removeRoles);
+        console.log("Removed roles:", removed.roles.cache.map(r => r.id));
+
+        // 🔴 refresh member (foarte important)
+        const refreshed = await interaction.guild.members.fetch(mentionedUserId);
+
+        console.log("AFTER REMOVE:", refreshed.roles.cache.map(r => r.id));
+
+        // 🟢 PAS 2: ADD
+        const added = await refreshed.roles.add(addRoles);
+        console.log("Added roles:", added.roles.cache.map(r => r.id));
 
     } catch (error) {
         console.error('Eroare la schimbarea rolurilor:', error);
@@ -1147,7 +1158,7 @@ if (interaction.customId.startsWith('task_done_')) {
         const logsChannel = await client.channels.fetch(taskLogsChannelId);
 
         await logsChannel.send(
-            `📢 ${interaction.user} a preluat task-ul lui <@${mentionedUserId}>.`
+            `📢 ${interaction.user} a finalizat task-ul lui <@${mentionedUserId}>.`
         );
     } catch (error) {
         console.error('Eroare la logs channel:', error);
