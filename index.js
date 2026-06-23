@@ -1087,7 +1087,7 @@ await interaction.update({
 });
 
 // Obtinem membrul din server
-const member = await interaction.guild.members.fetch(mentionedUserId);
+const taskMember = await interaction.guild.members.fetch(mentionedUserId);
 
 // ID-urile rolurilor care vor fi scoase
 const removeRoles = [
@@ -1103,9 +1103,11 @@ const addRoles = [
 
 try {
 
-    await member.roles.remove(removeRoles);
+    // Scoate rolurile vechi
+    await taskMember.roles.remove(removeRoles);
 
-    await member.roles.add(addRoles);
+    // Adauga rolurile noi
+    await taskMember.roles.add(addRoles);
 
 } catch (error) {
 
@@ -1117,7 +1119,7 @@ const logsChannel = await client.channels.fetch(
 );
 
 await logsChannel.send(
-    `📢 <@${mentionedUserId}> este pregatit pentru predarea task-ului.`
+    `📢 <@${mentionedUserId}> a finalizat task-ul si i-au fost actualizate rolurile.`
 );
 
 return;
