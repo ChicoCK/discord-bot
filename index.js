@@ -1081,16 +1081,12 @@ if (interaction.isModalSubmit()) {
 
 if (interaction.customId.startsWith('task_done_')) {
 
-    // Doar managementul poate accepta task-ul
-    const hasPermission = interaction.member.roles.cache.has(
-        '1504935162092195930'
-    );
+    const hasPermission = interaction.member.roles.cache.has('1504935162092195930');
 
     if (!hasPermission) {
-
         return interaction.reply({
             content: '❌ Nu ai permisiunea sa preiei acest task.',
-            flags: MessageFlags.Ephemeral
+            ephemeral: true
         });
     }
 
@@ -1101,29 +1097,24 @@ if (interaction.customId.startsWith('task_done_')) {
     );
 
     if (!membruField) {
-
         return interaction.reply({
             content: '❌ Task invalid.',
-            flags: MessageFlags.Ephemeral
+            ephemeral: true
         });
     }
 
     const mentionedUserId = membruField.value.replace(/[<@!>]/g, '');
 
     const updatedEmbed = EmbedBuilder.from(embed)
-
         .setColor('Green')
-
         .spliceFields(3, 1, {
             name: '📌 Status',
             value: `✅ FINALIZAT de ${interaction.user}`
         });
 
     const disabledButtons = new ActionRowBuilder()
-
         .addComponents(
-            ButtonBuilder.from(interaction.component)
-                .setDisabled(true)
+            ButtonBuilder.from(interaction.component).setDisabled(true)
         );
 
     await interaction.update({
@@ -1132,36 +1123,27 @@ if (interaction.customId.startsWith('task_done_')) {
     });
 
     try {
+        const taskMember = await interaction.guild.members.fetch(mentionedUserId);
 
-        const taskMember =
-            await interaction.guild.members.fetch(
-                mentionedUserId
-            );
-
-        // Roluri scoase
-        await taskMember.roles.remove([
-            '1495171407615754321',
-            '1495171483838709802'
-        ]);
-
-        // Roluri adaugate
-        await taskMember.roles.add([
+        // ✅ FIX REAL: set() înlocuiește TOT setul de roluri
+        await taskMember.roles.set([
             '1493795104950059139',
             '1494013913942065182'
         ]);
 
     } catch (error) {
-
         console.error('Eroare la schimbarea rolurilor:', error);
     }
 
-    const logsChannel = await client.channels.fetch(
-        taskLogsChannelId
-    );
+    try {
+        const logsChannel = await client.channels.fetch(taskLogsChannelId);
 
-    await logsChannel.send(
-        `📢 ${interaction.user} a preluat task-ul lui <@${mentionedUserId}>.`
-    );
+        await logsChannel.send(
+            `📢 ${interaction.user} a preluat task-ul lui <@${mentionedUserId}>.`
+        );
+    } catch (error) {
+        console.error('Eroare la logs channel:', error);
+    }
 
     return;
 }
