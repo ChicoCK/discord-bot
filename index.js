@@ -61,8 +61,6 @@ const leadershipRoleIds = [
     '1504935162092195930'
 ];
 
-const invoireManagerRoleId = '1503084616695681064';
-
 // ================= READY =================
 
 client.once(Events.ClientReady, async () => {
@@ -1079,93 +1077,81 @@ if (interaction.isModalSubmit()) {
             // TASK BUTTON
             // =====================================================
 
-if (interaction.customId.startsWith('task_done_')) {
+            if (interaction.customId.startsWith('task_done_')) {
 
-    const hasPermission = interaction.member.roles.cache.has('1504935162092195930');
+                const embed = interaction.message.embeds[0];
 
-    if (!hasPermission) {
-        return interaction.reply({
-            content: '❌ Nu ai permisiunea sa preiei acest task.',
-            ephemeral: true
-        });
-    }
+                const membruField = embed.fields.find(
+                    field => field.name === '👤 Membru'
+                );
 
-    const embed = interaction.message.embeds[0];
+                if (!membruField) {
 
-    const membruField = embed.fields.find(
-        field => field.name === '👤 Membru'
-    );
+                    return interaction.reply({
 
-    if (!membruField) {
-        return interaction.reply({
-            content: '❌ Task invalid.',
-            ephemeral: true
-        });
-    }
+                        content: '❌ Task invalid.',
 
-    const mentionedUserId = membruField.value.replace(/[<@!>]/g, '');
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
 
-    const updatedEmbed = EmbedBuilder.from(embed)
-        .setColor('Green')
-        .spliceFields(3, 1, {
-            name: '📌 Status',
-            value: `✅ FINALIZAT de ${interaction.user}`
-        });
+                const mentionedUserId = membruField.value.replace(/[<@!>]/g, '');
 
-    const disabledButtons = new ActionRowBuilder()
-        .addComponents(
-            ButtonBuilder.from(interaction.component).setDisabled(true)
-        );
+                const isOwner = interaction.user.id === mentionedUserId;
 
-    await interaction.update({
-        embeds: [updatedEmbed],
-        components: [disabledButtons]
-    });
+                const isLeadership = interaction.member.roles.cache.some(role =>
+                    leadershipRoleIds.includes(role.id)
+                );
 
-    try {
-        const taskMember = await interaction.guild.members.fetch(mentionedUserId);
+                if (!isOwner && !isLeadership) {
 
-        const removeRoles = [
-            '1495171407615754321',
-            '1495171483838709802'
-        ];
+                    return interaction.reply({
 
-        const addRoles = [
-            '1493795104950059139',
-            '1494013913942065182'
-        ];
+                        content: '❌ Nu ai permisiune sa folosesti acest buton.',
 
-        console.log("BEFORE:", taskMember.roles.cache.map(r => r.id));
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
 
-        // 🔴 PAS 1: REMOVE cu verificare
-        const removed = await taskMember.roles.remove(removeRoles);
-        console.log("Removed roles:", removed.roles.cache.map(r => r.id));
+                const updatedEmbed = EmbedBuilder.from(
+                    interaction.message.embeds[0]
+                )
 
-        // 🔴 refresh member (foarte important)
-        const refreshed = await interaction.guild.members.fetch(mentionedUserId);
+                    .setColor('Green')
 
-        console.log("AFTER REMOVE:", refreshed.roles.cache.map(r => r.id));
+                    .spliceFields(3, 1, {
 
-        // 🟢 PAS 2: ADD
-        const added = await refreshed.roles.add(addRoles);
-        console.log("Added roles:", added.roles.cache.map(r => r.id));
+                        name: '📌 Status',
 
-    } catch (error) {
-        console.error('Eroare la schimbarea rolurilor:', error);
-    }
+                        value: '✅ FINALIZAT'
+                    });
 
-    try {
-        const logsChannel = await client.channels.fetch(taskLogsChannelId);
+                const disabledButtons = new ActionRowBuilder()
 
-        await logsChannel.send(
-            `📢 ${interaction.user} a finalizat task-ul lui <@${mentionedUserId}>.`
-        );
-    } catch (error) {
-        console.error('Eroare la logs channel:', error);
-    }
+                    .addComponents(
 
-    return;
-}
+                        ButtonBuilder.from(interaction.component)
+
+                            .setDisabled(true)
+                    );
+
+                await interaction.update({
+
+                    embeds: [updatedEmbed],
+
+                    components: [disabledButtons]
+                });
+
+                const logsChannel = await client.channels.fetch(
+                    taskLogsChannelId
+                );
+
+                await logsChannel.send(
+                    `📢 <@${mentionedUserId}> este pregatit pentru predarea task-ului.`
+                );
+
+                return;
+            }
 
  // INVOIRE
 
@@ -1173,18 +1159,6 @@ if (interaction.customId.startsWith('task_done_')) {
     interaction.customId.startsWith('accept_invoire_')
 ) {
 
-const hasPermission =
-    interaction.member.roles.cache.has(
-        invoireManagerRoleId
-    );
-
-if (!hasPermission) {
-    return interaction.reply({
-        content: '❌ Nu ai permisiunea sa aprobi invoiri.',
-        flags: MessageFlags.Ephemeral
-    });
-}                
-                
     const embed =
         EmbedBuilder.from(
             interaction.message.embeds[0]
@@ -1242,18 +1216,6 @@ if (!hasPermission) {
 if (
     interaction.customId.startsWith('reject_invoire_')
 ) {
-
-    const hasPermission =
-    interaction.member.roles.cache.has(
-        invoireManagerRoleId
-    );
-
-if (!hasPermission) {
-    return interaction.reply({
-        content: '❌ Nu ai permisiunea sa respingi invoiri.',
-        flags: MessageFlags.Ephemeral
-    });
-}
 
     const embed =
         EmbedBuilder.from(
