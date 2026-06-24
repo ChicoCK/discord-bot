@@ -62,7 +62,6 @@ const leadershipRoleIds = [
 ];
 
 const invoireManagerRoleId = '1503084616695681064';
-const inventory = new Map();
 
 // ================= READY =================
 
@@ -303,33 +302,6 @@ new SlashCommandBuilder()
 
         console.error(err);
     }
-
-    new SlashCommandBuilder()
-    .setName('coca')
-    .setDescription('Calculator coca')
-    .addIntegerOption(option =>
-        option.setName('cantitate')
-            .setDescription('Cantitate adaugata')
-            .setRequired(false)
-    ),
-
-new SlashCommandBuilder()
-    .setName('crack')
-    .setDescription('Calculator crack')
-    .addIntegerOption(option =>
-        option.setName('cantitate')
-            .setDescription('Cantitate adaugata')
-            .setRequired(false)
-    ),
-
-new SlashCommandBuilder()
-    .setName('tigarii')
-    .setDescription('Calculator tigarii')
-    .addIntegerOption(option =>
-        option.setName('cantitate')
-            .setDescription('Cantitate adaugata')
-            .setRequired(false)
-    ),
 });
 
 // ================= ERRORS =================
@@ -985,63 +957,6 @@ if (interaction.commandName === 'invoire') {
                     flags: MessageFlags.Ephemeral
                 });
             }
-
-            // ==================== COCA ====================
-if (interaction.commandName === 'coca') {
-
-    const cantitate = interaction.options.getInteger('cantitate') || 0;
-
-    if (!inventory.has(interaction.user.id)) {
-        inventory.set(interaction.user.id, { coca: 0, crack: 0, tigarii: 0 });
-    }
-
-    const user = inventory.get(interaction.user.id);
-
-    if (cantitate > 0) user.coca += cantitate;
-
-    return interaction.reply({
-        content: `💊 Coca: ${user.coca}`,
-        flags: MessageFlags.Ephemeral
-    });
-}
-
-// ==================== CRACK ====================
-if (interaction.commandName === 'crack') {
-
-    const cantitate = interaction.options.getInteger('cantitate') || 0;
-
-    if (!inventory.has(interaction.user.id)) {
-        inventory.set(interaction.user.id, { coca: 0, crack: 0, tigarii: 0 });
-    }
-
-    const user = inventory.get(interaction.user.id);
-
-    if (cantitate > 0) user.crack += cantitate;
-
-    return interaction.reply({
-        content: `💀 Crack: ${user.crack}`,
-        flags: MessageFlags.Ephemeral
-    });
-}
-
-// ==================== TIGARII ====================
-if (interaction.commandName === 'tigarii') {
-
-    const cantitate = interaction.options.getInteger('cantitate') || 0;
-
-    if (!inventory.has(interaction.user.id)) {
-        inventory.set(interaction.user.id, { coca: 0, crack: 0, tigarii: 0 });
-    }
-
-    const user = inventory.get(interaction.user.id);
-
-    if (cantitate > 0) user.tigarii += cantitate;
-
-    return interaction.reply({
-        content: `🚬 Țigări: ${user.tigarii}`,
-        flags: MessageFlags.Ephemeral
-    });
-}
         }
 
         // =====================================================
