@@ -61,6 +61,8 @@ const leadershipRoleIds = [
     '1504935162092195930'
 ];
 
+const invoireManagerRoleId = '1503084616695681064';
+
 // ================= READY =================
 
 client.once(Events.ClientReady, async () => {
@@ -245,7 +247,17 @@ client.once(Events.ClientReady, async () => {
 
 new SlashCommandBuilder()
     .setName('invoire')
-    .setDescription('Trimite o cerere de invoire'),
+    .setDescription('Trimite o cerere de invoire')
+    .addStringOption(option =>
+        option
+            .setName('tip')
+            .setDescription('Tipul invoirii')
+            .setRequired(true)
+            .addChoices(
+                { name: 'Ore', value: 'ore' },
+                { name: 'Zile', value: 'zile' }
+            )
+    ),
         
         // ================= PROFIL =================
 
@@ -859,15 +871,21 @@ client.on(Events.InteractionCreate, async interaction => {
 
        // /INVOIRE
 
-            if (interaction.commandName === 'invoire') {
+if (interaction.commandName === 'invoire') {
+
+    const tip = interaction.options.getString('tip');
 
     const modal = new ModalBuilder()
-        .setCustomId('invoire_modal')
+        .setCustomId(`invoire_modal_${tip}`)
         .setTitle('Cerere de Invoire');
 
-    const zile = new TextInputBuilder()
-        .setCustomId('zile')
-        .setLabel('Cate zile?')
+    const perioada = new TextInputBuilder()
+        .setCustomId('perioada')
+        .setLabel(
+            tip === 'ore'
+                ? 'Cate ore?'
+                : 'Cate zile?'
+        )
         .setStyle(TextInputStyle.Short)
         .setRequired(true);
 
@@ -878,7 +896,7 @@ client.on(Events.InteractionCreate, async interaction => {
         .setRequired(true);
 
     modal.addComponents(
-        new ActionRowBuilder().addComponents(zile),
+        new ActionRowBuilder().addComponents(perioada),
         new ActionRowBuilder().addComponents(motiv)
     );
 
@@ -974,68 +992,86 @@ if (interaction.isModalSubmit()) {
 
     // ================= INVOIRE MODAL =================
 
-    if (interaction.customId === 'invoire_modal') {
+if (interaction.customId.startsWith('invoire_modal_')) {
 
-        const zile = parseInt(
-            interaction.fields.getTextInputValue('zile')
-        );
+const tip = interaction.customId.split('_')[2];
 
-        const motiv =
-            interaction.fields.getTextInputValue('motiv');
+const perioada = parseInt(
+    interaction.fields.getTextInputValue('perioada')
+);
+
+const motiv =
+    interaction.fields.getTextInputValue('motiv');
 
         const startDate = new Date();
 
         const endDate = new Date();
 
-        endDate.setDate(endDate.getDate() + zile);
+if (tip === 'zile') {
+    endDate.setDate(endDate.getDate() + perioada);
+}
 
         const id = invoireCounter++;
 
-        invoiri.set(id.toString(), {
-            userId: interaction.user.id,
-            zile,
-            motiv
-        });
+invoiri.set(id.toString(), {
+    userId: interaction.user.id,
+    tip,
+    perioada,
+    motiv
+});
 
-        const embed = new EmbedBuilder()
-            .setColor('Green')
-            .setTitle('📋 CERERE DE CONCEDIU NOUA')
-            .addFields(
-                {
-                    name: '🆔 ID',
-                    value: `#${id}`
-                },
-                {
-                    name: '👤 Membru',
-                    value: `<@${interaction.user.id}>`
-                },
-                {
-                    name: '📅 Zile Solicitate',
-                    value: `${zile}`
-                },
-                {
-                    name: '📝 Motiv',
-                    value: motiv
-                },
-                {
-                    name: '🚀 Data Inceput',
-                    value: startDate.toLocaleDateString('ro-RO')
-                },
-                {
-                    name: '🏁 Data Sfarsit',
-                    value: endDate.toLocaleDateString('ro-RO')
-                },
-                {
-                    name: '📌 Status',
-                    value: '🟨 PENDING'
-                }
-            )
-            .setThumbnail(
-                interaction.user.displayAvatarURL()
-            )
-            .setFooter({
-                text: `User ID: ${interaction.user.id}`
-            });
+const embed = new EmbedBuilder()
+    .setColor('Green')
+    .setTitle('📋 CERERE DE INVOIRE NOUA')
+    .addFields(
+        {
+            name: '🆔 ID',
+            value: `#${id}`
+        },
+        {
+            name: '👤 Membru',
+            value: `<@${interaction.user.id}>`
+        },
+        {
+            name: '📌 Tip Invoire',
+            value: tip === 'ore'
+                ? '⏰ Ore'
+                : '📅 Zile'
+        },
+        {
+            name: tip === 'ore'
+                ? '⏰ Ore Solicitate'
+                : '📅 Zile Solicitate',
+            value: `${perioada}`
+        },
+        {
+            name: '📝 Motiv',
+            value: motiv
+        },
+        {
+            name: '📌 Status',
+            value: '🟨 PENDING'
+        }
+    )
+    .setThumbnail(
+        interaction.user.displayAvatarURL()
+    )
+    .setFooter({
+        text: `User ID: ${interaction.user.id}`
+    });
+
+if (tip === 'zile') {
+    embed.addFields(
+        {
+            name: '🚀 Data Inceput',
+            value: startDate.toLocaleDateString('ro-RO')
+        },
+        {
+            name: '🏁 Data Sfarsit',
+            value: endDate.toLocaleDateString('ro-RO')
+        }
+    );
+}
 
         const buttons = new ActionRowBuilder()
             .addComponents(
@@ -1159,6 +1195,16 @@ if (interaction.isModalSubmit()) {
     interaction.customId.startsWith('accept_invoire_')
 ) {
 
+                const canManageInvoiri =
+    interaction.member.roles.cache.has(invoireManagerRoleId);
+
+if (!canManageInvoiri) {
+    return interaction.reply({
+        content: '❌ Nu ai permisiunea sa aprobi invoiri.',
+        flags: MessageFlags.Ephemeral
+    });
+}
+                
     const embed =
         EmbedBuilder.from(
             interaction.message.embeds[0]
@@ -1217,6 +1263,16 @@ if (
     interaction.customId.startsWith('reject_invoire_')
 ) {
 
+const canManageInvoiri =
+    interaction.member.roles.cache.has(invoireManagerRoleId);
+
+if (!canManageInvoiri) {
+    return interaction.reply({
+        content: '❌ Nu ai permisiunea sa respingi invoiri.',
+        flags: MessageFlags.Ephemeral
+    });
+}
+    
     const embed =
         EmbedBuilder.from(
             interaction.message.embeds[0]
