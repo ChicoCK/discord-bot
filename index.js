@@ -304,44 +304,35 @@ new SlashCommandBuilder()
     }
 });
 
-// ================= DRUG CALCULATOR =================
+// ================= CALCULATOR =================
 
 new SlashCommandBuilder()
-    .setName('crack')
-    .setDescription('Calculeaza profit crack')
+    .setName('coca')
+    .setDescription('Calculator Coca')
+
     .addIntegerOption(option =>
-        option.setName('cost_material')
-            .setDescription('Cost material total')
-            .setRequired(true))
-    .addIntegerOption(option =>
-        option.setName('cantitate')
-            .setDescription('Cantitate produsa')
+        option.setName('plicuri')
+            .setDescription('Câte plicuri vrei să produci')
             .setRequired(true)
     ),
 
 new SlashCommandBuilder()
-    .setName('coca')
-    .setDescription('Calculeaza profit cocaina')
+    .setName('crack')
+    .setDescription('Calculator Crack')
+
     .addIntegerOption(option =>
-        option.setName('cost_material')
-            .setDescription('Cost material total')
-            .setRequired(true))
-    .addIntegerOption(option =>
-        option.setName('cantitate')
-            .setDescription('Cantitate produsa')
+        option.setName('plicuri')
+            .setDescription('Câte plicuri de crack vrei să faci')
             .setRequired(true)
     ),
 
 new SlashCommandBuilder()
     .setName('tigarii')
-    .setDescription('Calculeaza profit tigari')
+    .setDescription('Calculator Țigări')
+
     .addIntegerOption(option =>
-        option.setName('cost_material')
-            .setDescription('Cost material total')
-            .setRequired(true))
-    .addIntegerOption(option =>
-        option.setName('cantitate')
-            .setDescription('Cantitate produsa')
+        option.setName('pachete')
+            .setDescription('Câte pachete de țigări')
             .setRequired(true)
     ),
 
@@ -1000,88 +991,95 @@ if (interaction.commandName === 'invoire') {
             }
         }
 
-if (interaction.commandName === 'crack') {
+if (interaction.commandName === 'coca') {
 
-    const costMaterial = interaction.options.getInteger('cost_material');
-    const cantitate = interaction.options.getInteger('cantitate');
+    const plicuri = interaction.options.getInteger('plicuri');
 
-    const pretVanzare = 100;
+    // ===== COSTURI =====
+    const amoniac = plicuri * 0.25; // aproximare din tabel
+    const sodiu = plicuri * 0.25;
+    const frunze = plicuri * 3;
+    const plicuriGoale = plicuri;
 
-    const totalCost = costMaterial * cantitate;
-    const totalRevenue = pretVanzare * cantitate;
-    const profit = totalRevenue - totalCost;
-
-    const profitPercent = totalCost === 0
-        ? 0
-        : (profit / totalCost) * 100;
+    const costTotal = plicuri * 2400; // bazat pe 100 = 240.000
 
     const embed = new EmbedBuilder()
-        .setTitle('💰 Crack Calculator')
+        .setTitle('🌿 CALCULATOR COCA')
         .setColor('Green')
         .addFields(
-            { name: 'Cost total', value: `${totalCost}$`, inline: true },
-            { name: 'Venit total', value: `${totalRevenue}$`, inline: true },
-            { name: 'Profit', value: `${profit}$`, inline: true },
-            { name: 'Profit %', value: `${profitPercent.toFixed(2)}%`, inline: true }
-        );
+            { name: '📦 Plicuri dorite', value: `${plicuri}` },
+            { name: '⚗️ Amoniac', value: `${Math.round(amoniac)}` },
+            { name: '🧪 Sodiu', value: `${Math.round(sodiu)}` },
+            { name: '🍃 Frunze', value: `${frunze}` },
+            { name: '💰 Cost total', value: `${costTotal.toLocaleString()}$` }
+        )
+        .setTimestamp();
 
-    return interaction.reply({ embeds: [embed] });
+    return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
 }
 
-        if (interaction.commandName === 'coca') {
+        if (interaction.commandName === 'crack') {
 
-    const costMaterial = interaction.options.getInteger('cost_material');
-    const cantitate = interaction.options.getInteger('cantitate');
+    const plicuri = interaction.options.getInteger('plicuri');
 
-    const pretVanzare = 150;
+    // 100 cocaina = 200 crack (din datele tale)
+    const cocaina = plicuri / 2;
+    const brichete = cocaina;
+    const apa = plicuri * 2;
 
-    const totalCost = costMaterial * cantitate;
-    const totalRevenue = pretVanzare * cantitate;
-    const profit = totalRevenue - totalCost;
+    const cost = cocaina * 3179;
+    const costApa = apa * 50; // estimare RP
 
-    const profitPercent = totalCost === 0
-        ? 0
-        : (profit / totalCost) * 100;
+    const totalCost = cost + costApa;
+
+    const profit = plicuri * 636000 / 200; // raport din tabel
 
     const embed = new EmbedBuilder()
-        .setTitle('💰 Cocaine Calculator')
+        .setTitle('💊 CALCULATOR CRACK')
         .setColor('Red')
         .addFields(
-            { name: 'Cost total', value: `${totalCost}$`, inline: true },
-            { name: 'Venit total', value: `${totalRevenue}$`, inline: true },
-            { name: 'Profit', value: `${profit}$`, inline: true },
-            { name: 'Profit %', value: `${profitPercent.toFixed(2)}%`, inline: true }
-        );
+            { name: '📦 Crack dorit', value: `${plicuri}` },
+            { name: '🌿 Cocaină necesară', value: `${cocaina}` },
+            { name: '🧱 Brichete', value: `${brichete}` },
+            { name: '💧 Apă', value: `${apa}` },
+            { name: '💰 Cost producție', value: `${totalCost.toLocaleString()}$` },
+            { name: '💸 Profit estimat', value: `${profit.toLocaleString()}$` }
+        )
+        .setTimestamp();
 
-    return interaction.reply({ embeds: [embed] });
+    return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
 }
 
         if (interaction.commandName === 'tigarii') {
 
-    const costMaterial = interaction.options.getInteger('cost_material');
-    const cantitate = interaction.options.getInteger('cantitate');
+    const pachete = interaction.options.getInteger('pachete');
 
-    const pretVanzare = 10;
+    const foi = pachete * 20;
+    const filtre = pachete * 20;
+    const frunze = pachete * 80;
+    const pacheteGoale = pachete;
 
-    const totalCost = costMaterial * cantitate;
-    const totalRevenue = pretVanzare * cantitate;
-    const profit = totalRevenue - totalCost;
+    const costMateriale = pachete * 77; // din calc 500 frunze = 77k
 
-    const profitPercent = totalCost === 0
-        ? 0
-        : (profit / totalCost) * 100;
+    const vanzare = pachete * 5000;
+    const profit = vanzare - costMateriale;
 
     const embed = new EmbedBuilder()
-        .setTitle('🚬 Tigari Calculator')
+        .setTitle('🚬 CALCULATOR ȚIGĂRI')
         .setColor('Grey')
         .addFields(
-            { name: 'Cost total', value: `${totalCost}$`, inline: true },
-            { name: 'Venit total', value: `${totalRevenue}$`, inline: true },
-            { name: 'Profit', value: `${profit}$`, inline: true },
-            { name: 'Profit %', value: `${profitPercent.toFixed(2)}%`, inline: true }
-        );
+            { name: '📦 Pachete', value: `${pachete}` },
+            { name: '📄 Foițe', value: `${foi}` },
+            { name: '🔵 Filtre', value: `${filtre}` },
+            { name: '🍃 Frunze', value: `${frunze}` },
+            { name: '💰 Cost materiale', value: `${costMateriale.toLocaleString()}$` },
+            { name: '💸 Vânzare', value: `${vanzare.toLocaleString()}$` },
+            { name: '📈 Profit', value: `${profit.toLocaleString()}$` }
+        )
+        .setTimestamp();
 
-    return interaction.reply({ embeds: [embed] });
+    return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+}
 }
         
         // =====================================================
