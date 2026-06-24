@@ -62,6 +62,7 @@ const leadershipRoleIds = [
 ];
 
 const invoireManagerRoleId = '1503084616695681064';
+const inventory = new Map();
 
 // ================= READY =================
 
@@ -302,39 +303,34 @@ new SlashCommandBuilder()
 
         console.error(err);
     }
-});
 
-// ================= CALCULATOR =================
-
-new SlashCommandBuilder()
+    new SlashCommandBuilder()
     .setName('coca')
-    .setDescription('Calculator Coca')
-
+    .setDescription('Calculator coca')
     .addIntegerOption(option =>
-        option.setName('plicuri')
-            .setDescription('Câte plicuri vrei să produci')
-            .setRequired(true)
+        option.setName('cantitate')
+            .setDescription('Cantitate adaugata')
+            .setRequired(false)
     ),
 
 new SlashCommandBuilder()
     .setName('crack')
-    .setDescription('Calculator Crack')
-
+    .setDescription('Calculator crack')
     .addIntegerOption(option =>
-        option.setName('plicuri')
-            .setDescription('Câte plicuri de crack vrei să faci')
-            .setRequired(true)
+        option.setName('cantitate')
+            .setDescription('Cantitate adaugata')
+            .setRequired(false)
     ),
 
 new SlashCommandBuilder()
     .setName('tigarii')
-    .setDescription('Calculator Țigări')
-
+    .setDescription('Calculator tigarii')
     .addIntegerOption(option =>
-        option.setName('pachete')
-            .setDescription('Câte pachete de țigări')
-            .setRequired(true)
+        option.setName('cantitate')
+            .setDescription('Cantitate adaugata')
+            .setRequired(false)
     ),
+});
 
 // ================= ERRORS =================
 
@@ -989,99 +985,65 @@ if (interaction.commandName === 'invoire') {
                     flags: MessageFlags.Ephemeral
                 });
             }
-        }
 
+            // ==================== COCA ====================
 if (interaction.commandName === 'coca') {
 
-    const plicuri = interaction.options.getInteger('plicuri');
+    const cantitate = interaction.options.getInteger('cantitate') || 0;
 
-    // ===== COSTURI =====
-    const amoniac = plicuri * 0.25; // aproximare din tabel
-    const sodiu = plicuri * 0.25;
-    const frunze = plicuri * 3;
-    const plicuriGoale = plicuri;
+    if (!inventory.has(interaction.user.id)) {
+        inventory.set(interaction.user.id, { coca: 0, crack: 0, tigarii: 0 });
+    }
 
-    const costTotal = plicuri * 2400; // bazat pe 100 = 240.000
+    const user = inventory.get(interaction.user.id);
 
-    const embed = new EmbedBuilder()
-        .setTitle('🌿 CALCULATOR COCA')
-        .setColor('Green')
-        .addFields(
-            { name: '📦 Plicuri dorite', value: `${plicuri}` },
-            { name: '⚗️ Amoniac', value: `${Math.round(amoniac)}` },
-            { name: '🧪 Sodiu', value: `${Math.round(sodiu)}` },
-            { name: '🍃 Frunze', value: `${frunze}` },
-            { name: '💰 Cost total', value: `${costTotal.toLocaleString()}$` }
-        )
-        .setTimestamp();
+    if (cantitate > 0) user.coca += cantitate;
 
-    return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+    return interaction.reply({
+        content: `💊 Coca: ${user.coca}`,
+        flags: MessageFlags.Ephemeral
+    });
 }
 
-        if (interaction.commandName === 'crack') {
+// ==================== CRACK ====================
+if (interaction.commandName === 'crack') {
 
-    const plicuri = interaction.options.getInteger('plicuri');
+    const cantitate = interaction.options.getInteger('cantitate') || 0;
 
-    // 100 cocaina = 200 crack (din datele tale)
-    const cocaina = plicuri / 2;
-    const brichete = cocaina;
-    const apa = plicuri * 2;
+    if (!inventory.has(interaction.user.id)) {
+        inventory.set(interaction.user.id, { coca: 0, crack: 0, tigarii: 0 });
+    }
 
-    const cost = cocaina * 3179;
-    const costApa = apa * 50; // estimare RP
+    const user = inventory.get(interaction.user.id);
 
-    const totalCost = cost + costApa;
+    if (cantitate > 0) user.crack += cantitate;
 
-    const profit = plicuri * 636000 / 200; // raport din tabel
-
-    const embed = new EmbedBuilder()
-        .setTitle('💊 CALCULATOR CRACK')
-        .setColor('Red')
-        .addFields(
-            { name: '📦 Crack dorit', value: `${plicuri}` },
-            { name: '🌿 Cocaină necesară', value: `${cocaina}` },
-            { name: '🧱 Brichete', value: `${brichete}` },
-            { name: '💧 Apă', value: `${apa}` },
-            { name: '💰 Cost producție', value: `${totalCost.toLocaleString()}$` },
-            { name: '💸 Profit estimat', value: `${profit.toLocaleString()}$` }
-        )
-        .setTimestamp();
-
-    return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+    return interaction.reply({
+        content: `💀 Crack: ${user.crack}`,
+        flags: MessageFlags.Ephemeral
+    });
 }
 
-        if (interaction.commandName === 'tigarii') {
+// ==================== TIGARII ====================
+if (interaction.commandName === 'tigarii') {
 
-    const pachete = interaction.options.getInteger('pachete');
+    const cantitate = interaction.options.getInteger('cantitate') || 0;
 
-    const foi = pachete * 20;
-    const filtre = pachete * 20;
-    const frunze = pachete * 80;
-    const pacheteGoale = pachete;
+    if (!inventory.has(interaction.user.id)) {
+        inventory.set(interaction.user.id, { coca: 0, crack: 0, tigarii: 0 });
+    }
 
-    const costMateriale = pachete * 77; // din calc 500 frunze = 77k
+    const user = inventory.get(interaction.user.id);
 
-    const vanzare = pachete * 5000;
-    const profit = vanzare - costMateriale;
+    if (cantitate > 0) user.tigarii += cantitate;
 
-    const embed = new EmbedBuilder()
-        .setTitle('🚬 CALCULATOR ȚIGĂRI')
-        .setColor('Grey')
-        .addFields(
-            { name: '📦 Pachete', value: `${pachete}` },
-            { name: '📄 Foițe', value: `${foi}` },
-            { name: '🔵 Filtre', value: `${filtre}` },
-            { name: '🍃 Frunze', value: `${frunze}` },
-            { name: '💰 Cost materiale', value: `${costMateriale.toLocaleString()}$` },
-            { name: '💸 Vânzare', value: `${vanzare.toLocaleString()}$` },
-            { name: '📈 Profit', value: `${profit.toLocaleString()}$` }
-        )
-        .setTimestamp();
-
-    return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+    return interaction.reply({
+        content: `🚬 Țigări: ${user.tigarii}`,
+        flags: MessageFlags.Ephemeral
+    });
 }
-}
-        
+        }
+
         // =====================================================
         // MODAL CV
         // =====================================================
