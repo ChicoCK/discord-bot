@@ -71,33 +71,6 @@ client.once(Events.ClientReady, async () => {
 
     const commands = [
 
-// ================= DRUG MANUFACTURING =================
-
-new SlashCommandBuilder()
-    .setName('crack')
-    .setDescription('Calculați profitul din fabricarea de crack')
-    .addIntegerOption(option =>
-        option.setName('cost_material').setDescription('Costul materialului').setRequired(true))
-    .addIntegerOption(option =>
-        option.setName('cantitate').setDescription('Cantitatea de crack produsă').setRequired(true)),
-
-new SlashCommandBuilder()
-    .setName('coca')
-    .setDescription('Calculați profitul din fabricarea de cocaină')
-    .addIntegerOption(option =>
-        option.setName('cost_material').setDescription('Costul materialului').setRequired(true))
-    .addIntegerOption(option =>
-        option.setName('cantitate').setDescription('Cantitatea de cocaină produsă').setRequired(true)),
-
-new SlashCommandBuilder()
-    .setName('tigarii')
-    .setDescription('Calculați profitul din fabricarea de tigări')
-    .addIntegerOption(option =>
-        option.setName('cost_material').setDescription('Costul materialului').setRequired(true))
-    .addIntegerOption(option =>
-        option.setName('cantitate').setDescription('Cantitatea de tigări produse').setRequired(true)),
-
-        
         // ================= CV =================
 
         new SlashCommandBuilder()
@@ -331,6 +304,47 @@ new SlashCommandBuilder()
     }
 });
 
+// ================= DRUG CALCULATOR =================
+
+new SlashCommandBuilder()
+    .setName('crack')
+    .setDescription('Calculeaza profit crack')
+    .addIntegerOption(option =>
+        option.setName('cost_material')
+            .setDescription('Cost material total')
+            .setRequired(true))
+    .addIntegerOption(option =>
+        option.setName('cantitate')
+            .setDescription('Cantitate produsa')
+            .setRequired(true)
+    ),
+
+new SlashCommandBuilder()
+    .setName('coca')
+    .setDescription('Calculeaza profit cocaina')
+    .addIntegerOption(option =>
+        option.setName('cost_material')
+            .setDescription('Cost material total')
+            .setRequired(true))
+    .addIntegerOption(option =>
+        option.setName('cantitate')
+            .setDescription('Cantitate produsa')
+            .setRequired(true)
+    ),
+
+new SlashCommandBuilder()
+    .setName('tigarii')
+    .setDescription('Calculeaza profit tigari')
+    .addIntegerOption(option =>
+        option.setName('cost_material')
+            .setDescription('Cost material total')
+            .setRequired(true))
+    .addIntegerOption(option =>
+        option.setName('cantitate')
+            .setDescription('Cantitate produsa')
+            .setRequired(true)
+    ),
+
 // ================= ERRORS =================
 
 process.on('unhandledRejection', console.error);
@@ -344,91 +358,6 @@ client.on(Events.InteractionCreate, async interaction => {
 
         if (interaction.isChatInputCommand()) {
 
-
-           // =====================================================
-            // /CRACK
-            // =====================================================
-            if (interaction.commandName === 'crack') {
-                const costMaterial = interaction.options.getInteger('cost_material');
-                const cantitate = interaction.options.getInteger('cantitate');
-
-                const pretVanzare = 100; // Exemplu
-                const totalCost = costMaterial * cantitate;
-                const totalRevenue = pretVanzare * cantitate;
-                const profit = totalRevenue - totalCost;
-                const profitPercentage = (profit / totalCost) * 100;
-
-                const embed = new EmbedBuilder()
-                    .setTitle('💰 Profit din fabricarea de crack')
-                    .addFields(
-                        { name: 'Cost material', value: `${totalCost} $`, inline: true },
-                        { name: 'Venit total', value: `${totalRevenue} $`, inline: true },
-                        { name: 'Profit', value: `${profit} $`, inline: true },
-                        { name: 'Procent profit', value: `${profitPercentage.toFixed(2)} %`, inline: true }
-                    ).setColor('GREEN');
-
-                return interaction.reply({ embeds: [embed] });
-            }
-
-            // =====================================================
-            // /COCA
-            // =====================================================
-            if (interaction.commandName === 'coca') {
-                const costMaterial = interaction.options.getInteger('cost_material');
-                const cantitate = interaction.options.getInteger('cantitate');
-
-                const pretVanzare = 150; // Exemplu
-                const totalCost = costMaterial * cantitate;
-                const totalRevenue = pretVanzare * cantitate;
-                const profit = totalRevenue - totalCost;
-                const profitPercentage = (profit / totalCost) * 100;
-
-                const embed = new EmbedBuilder()
-                    .setTitle('💰 Profit din fabricarea de cocaină')
-                    .addFields(
-                        { name: 'Cost material', value: `${totalCost} $`, inline: true },
-                        { name: 'Venit total', value: `${totalRevenue} $`, inline: true },
-                        { name: 'Profit', value: `${profit} $`, inline: true },
-                        { name: 'Procent profit', value: `${profitPercentage.toFixed(2)} %`, inline: true }
-                    ).setColor('GREEN');
-
-                return interaction.reply({ embeds: [embed] });
-            }
-
-            // =====================================================
-            // /TIGARII
-            // =====================================================
-            if (interaction.commandName === 'tigarii') {
-                const costMaterial = interaction.options.getInteger('cost_material');
-                const cantitate = interaction.options.getInteger('cantitate');
-
-                const pretVanzare = 10; // Exemplu
-                const totalCost = costMaterial * cantitate;
-                const totalRevenue = pretVanzare * cantitate;
-                const profit = totalRevenue - totalCost;
-                const profitPercentage = (profit / totalCost) * 100;
-
-                const embed = new EmbedBuilder()
-                    .setTitle('💰 Profit din fabricarea de tigări')
-                    .addFields(
-                        { name: 'Cost material', value: `${totalCost} $`, inline: true },
-                        { name: 'Venit total', value: `${totalRevenue} $`, inline: true },
-                        { name: 'Profit', value: `${profit} $`, inline: true },
-                        { name: 'Procent profit', value: `${profitPercentage.toFixed(2)} %`, inline: true }
-                    ).setColor('GREEN');
-
-                return interaction.reply({ embeds: [embed] });
-            }
-
-            // ... (alte comenzi)
-
-        }
-    } catch (err) {
-        console.error(err);
-    }
-});
-
-            
             // =====================================================
             // /CV
             // =====================================================
@@ -1071,6 +1000,90 @@ if (interaction.commandName === 'invoire') {
             }
         }
 
+if (interaction.commandName === 'crack') {
+
+    const costMaterial = interaction.options.getInteger('cost_material');
+    const cantitate = interaction.options.getInteger('cantitate');
+
+    const pretVanzare = 100;
+
+    const totalCost = costMaterial * cantitate;
+    const totalRevenue = pretVanzare * cantitate;
+    const profit = totalRevenue - totalCost;
+
+    const profitPercent = totalCost === 0
+        ? 0
+        : (profit / totalCost) * 100;
+
+    const embed = new EmbedBuilder()
+        .setTitle('💰 Crack Calculator')
+        .setColor('Green')
+        .addFields(
+            { name: 'Cost total', value: `${totalCost}$`, inline: true },
+            { name: 'Venit total', value: `${totalRevenue}$`, inline: true },
+            { name: 'Profit', value: `${profit}$`, inline: true },
+            { name: 'Profit %', value: `${profitPercent.toFixed(2)}%`, inline: true }
+        );
+
+    return interaction.reply({ embeds: [embed] });
+}
+
+        if (interaction.commandName === 'coca') {
+
+    const costMaterial = interaction.options.getInteger('cost_material');
+    const cantitate = interaction.options.getInteger('cantitate');
+
+    const pretVanzare = 150;
+
+    const totalCost = costMaterial * cantitate;
+    const totalRevenue = pretVanzare * cantitate;
+    const profit = totalRevenue - totalCost;
+
+    const profitPercent = totalCost === 0
+        ? 0
+        : (profit / totalCost) * 100;
+
+    const embed = new EmbedBuilder()
+        .setTitle('💰 Cocaine Calculator')
+        .setColor('Red')
+        .addFields(
+            { name: 'Cost total', value: `${totalCost}$`, inline: true },
+            { name: 'Venit total', value: `${totalRevenue}$`, inline: true },
+            { name: 'Profit', value: `${profit}$`, inline: true },
+            { name: 'Profit %', value: `${profitPercent.toFixed(2)}%`, inline: true }
+        );
+
+    return interaction.reply({ embeds: [embed] });
+}
+
+        if (interaction.commandName === 'tigarii') {
+
+    const costMaterial = interaction.options.getInteger('cost_material');
+    const cantitate = interaction.options.getInteger('cantitate');
+
+    const pretVanzare = 10;
+
+    const totalCost = costMaterial * cantitate;
+    const totalRevenue = pretVanzare * cantitate;
+    const profit = totalRevenue - totalCost;
+
+    const profitPercent = totalCost === 0
+        ? 0
+        : (profit / totalCost) * 100;
+
+    const embed = new EmbedBuilder()
+        .setTitle('🚬 Tigari Calculator')
+        .setColor('Grey')
+        .addFields(
+            { name: 'Cost total', value: `${totalCost}$`, inline: true },
+            { name: 'Venit total', value: `${totalRevenue}$`, inline: true },
+            { name: 'Profit', value: `${profit}$`, inline: true },
+            { name: 'Profit %', value: `${profitPercent.toFixed(2)}%`, inline: true }
+        );
+
+    return interaction.reply({ embeds: [embed] });
+}
+        
         // =====================================================
         // MODAL CV
         // =====================================================
