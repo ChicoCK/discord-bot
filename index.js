@@ -17,7 +17,7 @@ const {
 } = require('discord.js');
 
 // ================= CONFIGURAȚII DIRECT ÎN COD =================
-const token = 'MTUwMTM5MDE3ODg2MDY2Mjg0Nw.Gig6f6.SAweirW62WgtGjZKWodP8w15SR4NvlQXbe0PiA';
+const token = 
 const clientId = '1501390178860662847'; // ID-ul noului tău Bot (extras din token)
 const guildId = '1493764956859138170';  // ID-ul noului server
 const logChannelId = '1503422335909367971'; // ID-ul canalului de log-uri (pentru CV, warn, amenzi)
