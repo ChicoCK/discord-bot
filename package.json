@@ -1,12 +1,13 @@
 {
-  "name": "discord-calculator-bot",
+  "name": "discord-bot",
   "version": "1.0.0",
-  "description": "Discord Calculator Bot for Drugs and Cigarettes",
+  "description": "Discord Bot with CV, Tasks, Warnings, Invoiri, and Calculator",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "discord.js": "^14.15.3"
+    "discord.js": "^14.15.3",
+    "dotenv": "^16.4.5"
   }
 }
