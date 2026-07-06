@@ -1,5 +1,3 @@
-require('dotenv').config();
-
 const {
     Client,
     GatewayIntentBits,
@@ -18,14 +16,12 @@ const {
     MessageFlags
 } = require('discord.js');
 
-const {
-    clientId,
-    guildId,
-    logChannelId,
-    acceptedRoleIds
-} = require('./config.json');
-
-const token = process.env.DISCORD_TOKEN;
+// ================= CONFIGURAȚII DIRECT ÎN COD =================
+const token = 'MTUwMTM5MDE3ODg2MDY2Mjg0Nw.Gig6f6.SAweirW62WgtGjZKWodP8w15SR4NvlQXbe0PiA';
+const clientId = '1501390178860662847'; // ID-ul noului tău Bot (extras din token)
+const guildId = '1493764956859138170';  // ID-ul noului server
+const logChannelId = '1503422335909367971'; // ID-ul canalului de log-uri (pentru CV, warn, amenzi)
+const acceptedRoleIds = ['1504935162092195930']; // ID-urile de roluri care se oferă automat când CV-ul e acceptat
 
 const client = new Client({
 
@@ -274,7 +270,24 @@ new SlashCommandBuilder()
                     .setDescription('Membrul')
 
                     .setRequired(true)
-            )
+            ),
+
+        // ================= COCA, CRACK, TIGARI =================
+
+        new SlashCommandBuilder()
+            .setName('coca')
+            .setDescription('Calcul producție Coca')
+            .addIntegerOption(option => option.setName('cantitate').setDescription('Număr de bucăți').setMinValue(1)),
+
+        new SlashCommandBuilder()
+            .setName('crack')
+            .setDescription('Calcul producție Crack')
+            .addIntegerOption(option => option.setName('cantitate').setDescription('Număr de bucăți').setMinValue(1)),
+
+        new SlashCommandBuilder()
+            .setName('tigari')
+            .setDescription('Calcul producție Țigări')
+            .addIntegerOption(option => option.setName('pachete').setDescription('Număr de pachete').setMinValue(1))
 
     ].map(cmd => cmd.toJSON());
 
@@ -316,6 +329,51 @@ client.on(Events.InteractionCreate, async interaction => {
     try {
 
         if (interaction.isChatInputCommand()) {
+
+            // =====================================================
+            // /COCA, /CRACK, /TIGARI (Verificare grad minim + comenzi)
+            // =====================================================
+
+            if (['coca', 'crack', 'tigari'].includes(interaction.commandName)) {
+                const REQUIRED_ROLE_ID = '1493795104950059139';
+                const isOwner = interaction.guild.ownerId === interaction.user.id;
+                const isAdmin = interaction.member.permissions.has('Administrator');
+                let hasAccess = isOwner || isAdmin;
+
+                if (!hasAccess) {
+                    const requiredRole = interaction.guild.roles.cache.get(REQUIRED_ROLE_ID);
+                    if (requiredRole) {
+                        const memberHighestRole = interaction.member.roles.highest;
+                        if (memberHighestRole.position >= requiredRole.position) {
+                            hasAccess = true;
+                        }
+                    } else {
+                        if (interaction.member.roles.cache.has(REQUIRED_ROLE_ID)) {
+                            hasAccess = true;
+                        }
+                    }
+                }
+
+                if (!hasAccess) {
+                    return interaction.reply({
+                        content: `❌ Nu ai permisiunea de a folosi comenzile botului. Ai nevoie de gradul <@&${REQUIRED_ROLE_ID}> sau mai mare.`,
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+
+                if (interaction.commandName === 'coca') {
+                    const cantitate = interaction.options.getInteger('cantitate') || 100;
+                    return interaction.reply({ ...getCocaMessage(cantitate), flags: MessageFlags.Ephemeral });
+                }
+                if (interaction.commandName === 'crack') {
+                    const cantitate = interaction.options.getInteger('cantitate') || 100;
+                    return interaction.reply({ ...getCrackMessage(cantitate), flags: MessageFlags.Ephemeral });
+                }
+                if (interaction.commandName === 'tigari') {
+                    const pachete = interaction.options.getInteger('pachete') || 10;
+                    return interaction.reply({ ...getTigariMessage(pachete), flags: MessageFlags.Ephemeral });
+                }
+            }
 
             // =====================================================
             // /CV
@@ -665,6 +723,76 @@ client.on(Events.InteractionCreate, async interaction => {
             }
 
             // =====================================================
+            // /CLEARAMENZI
+            // =====================================================
+
+            if (interaction.commandName === 'clearamenzi') {
+
+                const isLeadership = interaction.member.roles.cache.some(role =>
+                    leadershipRoleIds.includes(role.id)
+                );
+
+                if (!isLeadership) {
+
+                    return interaction.reply({
+
+                        content: '❌ Nu ai permisiune.',
+
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+
+                const user = interaction.options.getUser('membru');
+
+                if (!amenzi.has(user.id)) {
+
+                    return interaction.reply({
+
+                        content: 'ℹ️ Acest membru nu are amenzi.',
+
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+
+                const total = amenzi.get(user.id).reduce((acc, a) => acc + a.suma, 0);
+
+                amenzi.delete(user.id);
+
+                const logChannel = await client.channels.fetch(logChannelId);
+
+                await logChannel.send({
+
+                    embeds: [
+                        new EmbedBuilder()
+                            .setTitle('💸 AMENZI RESETATE')
+                            .setColor('Green')
+                            .addFields(
+                                {
+                                    name: '👤 Membru',
+                                    value: `<@${user.id}>`
+                                },
+                                {
+                                    name: '🛡️ De către',
+                                    value: interaction.user.tag
+                                },
+                                {
+                                    name: '💰 Total șters',
+                                    value: `${total}$`
+                                }
+                            )
+                            .setTimestamp()
+                    ]
+                });
+
+                return interaction.reply({
+
+                    content: `✅ Amenzile lui ${user.tag} au fost șterse.`,
+
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+
+            // =====================================================
             // /AMENDA
             // =====================================================
 
@@ -750,72 +878,6 @@ client.on(Events.InteractionCreate, async interaction => {
                     flags: MessageFlags.Ephemeral
                 });
             }
-
-            if (interaction.commandName === 'clearamenzi') {
-
-    const isLeadership = interaction.member.roles.cache.some(role =>
-        leadershipRoleIds.includes(role.id)
-    );
-
-    if (!isLeadership) {
-
-        return interaction.reply({
-
-            content: '❌ Nu ai permisiune.',
-
-            flags: MessageFlags.Ephemeral
-        });
-    }
-
-    const user = interaction.options.getUser('membru');
-
-    if (!amenzi.has(user.id)) {
-
-        return interaction.reply({
-
-            content: 'ℹ️ Acest membru nu are amenzi.',
-
-            flags: MessageFlags.Ephemeral
-        });
-    }
-
-    const total = amenzi.get(user.id).reduce((acc, a) => acc + a.suma, 0);
-
-    amenzi.delete(user.id);
-
-    const logChannel = await client.channels.fetch(logChannelId);
-
-    await logChannel.send({
-
-        embeds: [
-            new EmbedBuilder()
-                .setTitle('💸 AMENZI RESETATE')
-                .setColor('Green')
-                .addFields(
-                    {
-                        name: '👤 Membru',
-                        value: `<@${user.id}>`
-                    },
-                    {
-                        name: '🛡️ De către',
-                        value: interaction.user.tag
-                    },
-                    {
-                        name: '💰 Total șters',
-                        value: `${total}$`
-                    }
-                )
-                .setTimestamp()
-        ]
-    });
-
-    return interaction.reply({
-
-        content: `✅ Amenzile lui ${user.tag} au fost șterse.`,
-
-        flags: MessageFlags.Ephemeral
-    });
-}
             
             // =====================================================
             // /AMENZI
@@ -869,39 +931,41 @@ client.on(Events.InteractionCreate, async interaction => {
                 });
             }
 
-       // /INVOIRE
+            // =====================================================
+            // /INVOIRE
+            // =====================================================
 
-if (interaction.commandName === 'invoire') {
+            if (interaction.commandName === 'invoire') {
 
-    const tip = interaction.options.getString('tip');
+                const tip = interaction.options.getString('tip');
 
-    const modal = new ModalBuilder()
-        .setCustomId(`invoire_modal_${tip}`)
-        .setTitle('Cerere de Invoire');
+                const modal = new ModalBuilder()
+                    .setCustomId(`invoire_modal_${tip}`)
+                    .setTitle('Cerere de Invoire');
 
-    const perioada = new TextInputBuilder()
-        .setCustomId('perioada')
-        .setLabel(
-            tip === 'ore'
-                ? 'Cate ore?'
-                : 'Cate zile?'
-        )
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true);
+                const perioada = new TextInputBuilder()
+                    .setCustomId('perioada')
+                    .setLabel(
+                        tip === 'ore'
+                            ? 'Cate ore?'
+                            : 'Cate zile?'
+                    )
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(true);
 
-    const motiv = new TextInputBuilder()
-        .setCustomId('motiv')
-        .setLabel('Motiv')
-        .setStyle(TextInputStyle.Paragraph)
-        .setRequired(true);
+                const motiv = new TextInputBuilder()
+                    .setCustomId('motiv')
+                    .setLabel('Motiv')
+                    .setStyle(TextInputStyle.Paragraph)
+                    .setRequired(true);
 
-    modal.addComponents(
-        new ActionRowBuilder().addComponents(perioada),
-        new ActionRowBuilder().addComponents(motiv)
-    );
+                modal.addComponents(
+                    new ActionRowBuilder().addComponents(perioada),
+                    new ActionRowBuilder().addComponents(motiv)
+                );
 
-    return interaction.showModal(modal);
-}
+                return interaction.showModal(modal);
+            }
             
             // =====================================================
             // /PROFIL
@@ -960,154 +1024,203 @@ if (interaction.commandName === 'invoire') {
         }
 
         // =====================================================
-        // MODAL CV
+        // MODALS SUBMIT
         // =====================================================
 
-if (interaction.isModalSubmit()) {
+        if (interaction.isModalSubmit()) {
 
-    // ================= CV MODAL =================
+            // ================= CV MODAL =================
 
-    if (interaction.customId === 'cv_modal') {
+            if (interaction.customId === 'cv_modal') {
 
-        applications.set(interaction.user.id, {
+                applications.set(interaction.user.id, {
 
-            nume: interaction.fields.getTextInputValue('nume'),
+                    nume: interaction.fields.getTextInputValue('nume'),
 
-            cnp: interaction.fields.getTextInputValue('cnp'),
+                    cnp: interaction.fields.getTextInputValue('cnp'),
 
-            luni: interaction.fields.getTextInputValue('luni'),
+                    luni: interaction.fields.getTextInputValue('luni'),
 
-            angajator: interaction.fields.getTextInputValue('angajator'),
+                    angajator: interaction.fields.getTextInputValue('angajator'),
 
-            telefon: interaction.fields.getTextInputValue('telefon')
-        });
+                    telefon: interaction.fields.getTextInputValue('telefon')
+                });
 
-        return await interaction.reply({
+                return await interaction.reply({
 
-            content: '📸 Acum trimite poza buletinului.',
+                    content: '📸 Acum trimite poza buletinului.',
 
-            flags: MessageFlags.Ephemeral
-        });
-    }
+                    flags: MessageFlags.Ephemeral
+                });
+            }
 
-    // ================= INVOIRE MODAL =================
+            // ================= INVOIRE MODAL =================
 
-if (interaction.customId.startsWith('invoire_modal_')) {
+            if (interaction.customId.startsWith('invoire_modal_')) {
 
-const tip = interaction.customId.split('_')[2];
+                const tip = interaction.customId.split('_')[2];
 
-const perioada = parseInt(
-    interaction.fields.getTextInputValue('perioada')
-);
+                const perioada = parseInt(
+                    interaction.fields.getTextInputValue('perioada')
+                );
 
-const motiv =
-    interaction.fields.getTextInputValue('motiv');
+                const motiv =
+                    interaction.fields.getTextInputValue('motiv');
 
-        const startDate = new Date();
+                const startDate = new Date();
 
-        const endDate = new Date();
+                const endDate = new Date();
 
-if (tip === 'zile') {
-    endDate.setDate(endDate.getDate() + perioada);
-}
+                if (tip === 'zile') {
+                    endDate.setDate(endDate.getDate() + perioada);
+                }
 
-        const id = invoireCounter++;
+                const id = invoireCounter++;
 
-invoiri.set(id.toString(), {
-    userId: interaction.user.id,
-    tip,
-    perioada,
-    motiv
-});
+                invoiri.set(id.toString(), {
+                    userId: interaction.user.id,
+                    tip,
+                    perioada,
+                    motiv
+                });
 
-const embed = new EmbedBuilder()
-    .setColor('Green')
-    .setTitle('📋 CERERE DE INVOIRE NOUA')
-    .addFields(
-        {
-            name: '🆔 ID',
-            value: `#${id}`
-        },
-        {
-            name: '👤 Membru',
-            value: `<@${interaction.user.id}>`
-        },
-        {
-            name: '📌 Tip Invoire',
-            value: tip === 'ore'
-                ? '⏰ Ore'
-                : '📅 Zile'
-        },
-        {
-            name: tip === 'ore'
-                ? '⏰ Ore Solicitate'
-                : '📅 Zile Solicitate',
-            value: `${perioada}`
-        },
-        {
-            name: '📝 Motiv',
-            value: motiv
-        },
-        {
-            name: '📌 Status',
-            value: '🟨 PENDING'
+                const embed = new EmbedBuilder()
+                    .setColor('Green')
+                    .setTitle('📋 CERERE DE INVOIRE NOUA')
+                    .addFields(
+                        {
+                            name: '🆔 ID',
+                            value: `#${id}`
+                        },
+                        {
+                            name: '👤 Membru',
+                            value: `<@${interaction.user.id}>`
+                        },
+                        {
+                            name: '📌 Tip Invoire',
+                            value: tip === 'ore'
+                                ? '⏰ Ore'
+                                : '📅 Zile'
+                        },
+                        {
+                            name: tip === 'ore'
+                                ? '⏰ Ore Solicitate'
+                                : '📅 Zile Solicitate',
+                            value: `${perioada}`
+                        },
+                        {
+                            name: '📝 Motiv',
+                            value: motiv
+                        },
+                        {
+                            name: '📌 Status',
+                            value: '🟨 PENDING'
+                        }
+                    )
+                    .setThumbnail(
+                        interaction.user.displayAvatarURL()
+                    )
+                    .setFooter({
+                        text: `User ID: ${interaction.user.id}`
+                    });
+
+                if (tip === 'zile') {
+                    embed.addFields(
+                        {
+                            name: '🚀 Data Inceput',
+                            value: startDate.toLocaleDateString('ro-RO')
+                        },
+                        {
+                            name: '🏁 Data Sfarsit',
+                            value: endDate.toLocaleDateString('ro-RO')
+                        }
+                    );
+                }
+
+                const buttons = new ActionRowBuilder()
+                    .addComponents(
+                        new ButtonBuilder()
+                            .setCustomId(`accept_invoire_${id}`)
+                            .setLabel('Aproba')
+                            .setStyle(ButtonStyle.Success),
+
+                        new ButtonBuilder()
+                            .setCustomId(`reject_invoire_${id}`)
+                            .setLabel('Respinge')
+                            .setStyle(ButtonStyle.Danger)
+                    );
+
+                const logChannel =
+                    await client.channels.fetch(
+                        invoireLogsChannelId
+                    );
+
+                await logChannel.send({
+                    embeds: [embed],
+                    components: [buttons]
+                });
+
+                return interaction.reply({
+                    content: '✅ Cererea de invoire a fost trimisa.',
+                    flags: MessageFlags.Ephemeral
+                });
+            }
         }
-    )
-    .setThumbnail(
-        interaction.user.displayAvatarURL()
-    )
-    .setFooter({
-        text: `User ID: ${interaction.user.id}`
-    });
-
-if (tip === 'zile') {
-    embed.addFields(
-        {
-            name: '🚀 Data Inceput',
-            value: startDate.toLocaleDateString('ro-RO')
-        },
-        {
-            name: '🏁 Data Sfarsit',
-            value: endDate.toLocaleDateString('ro-RO')
-        }
-    );
-}
-
-        const buttons = new ActionRowBuilder()
-            .addComponents(
-                new ButtonBuilder()
-                    .setCustomId(`accept_invoire_${id}`)
-                    .setLabel('Aproba')
-                    .setStyle(ButtonStyle.Success),
-
-                new ButtonBuilder()
-                    .setCustomId(`reject_invoire_${id}`)
-                    .setLabel('Respinge')
-                    .setStyle(ButtonStyle.Danger)
-            );
-
-        const logChannel =
-            await client.channels.fetch(
-                invoireLogsChannelId
-            );
-
-        await logChannel.send({
-            embeds: [embed],
-            components: [buttons]
-        });
-
-        return interaction.reply({
-            content: '✅ Cererea de invoire a fost trimisa.',
-            flags: MessageFlags.Ephemeral
-        });
-    }
-}
         
         // =====================================================
         // BUTTONS
         // =====================================================
 
         if (interaction.isButton()) {
+
+            // =====================================================
+            // CALCULATOR BUTTONS (Coca, Crack, Tigari)
+            // =====================================================
+
+            if (interaction.customId.startsWith('coca:') || interaction.customId.startsWith('crack:') || interaction.customId.startsWith('tigari:')) {
+                const REQUIRED_ROLE_ID = '1493795104950059139';
+                const isOwner = interaction.guild.ownerId === interaction.user.id;
+                const isAdmin = interaction.member.permissions.has('Administrator');
+                let hasAccess = isOwner || isAdmin;
+
+                if (!hasAccess) {
+                    const requiredRole = interaction.guild.roles.cache.get(REQUIRED_ROLE_ID);
+                    if (requiredRole) {
+                        const memberHighestRole = interaction.member.roles.highest;
+                        if (memberHighestRole.position >= requiredRole.position) {
+                            hasAccess = true;
+                        }
+                    } else {
+                        if (interaction.member.roles.cache.has(REQUIRED_ROLE_ID)) {
+                            hasAccess = true;
+                        }
+                    }
+                }
+
+                if (!hasAccess) {
+                    return interaction.reply({
+                        content: `❌ Nu ai permisiunea de a folosi comenzile botului. Ai nevoie de gradul <@&${REQUIRED_ROLE_ID}> sau mai mare.`,
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+
+                const customId = interaction.customId;
+                const parts = customId.split(':');
+                
+                if (parts[0] === 'coca' && parts[1] === 'upd') {
+                    const newPieces = parseInt(parts[2], 10);
+                    return await interaction.update(getCocaMessage(newPieces));
+                } 
+                else if (parts[0] === 'crack' && parts[1] === 'upd') {
+                    const newPieces = parseInt(parts[2], 10);
+                    return await interaction.update(getCrackMessage(newPieces));
+                } 
+                else if (parts[0] === 'tigari' && parts[1] === 'upd') {
+                    const newPacks = parseInt(parts[2], 10);
+                    return await interaction.update(getTigariMessage(newPacks));
+                }
+                return;
+            }
 
             // =====================================================
             // TASK BUTTON
@@ -1189,143 +1302,141 @@ if (tip === 'zile') {
                 return;
             }
 
- // INVOIRE
+            // =====================================================
+            // INVOIRE BUTTONS
+            // =====================================================
 
-            if (
-    interaction.customId.startsWith('accept_invoire_')
-) {
+            if (interaction.customId.startsWith('accept_invoire_')) {
 
                 const canManageInvoiri =
-    interaction.member.roles.cache.has(invoireManagerRoleId);
+                    interaction.member.roles.cache.has(invoireManagerRoleId);
 
-if (!canManageInvoiri) {
-    return interaction.reply({
-        content: '❌ Nu ai permisiunea sa aprobi invoiri.',
-        flags: MessageFlags.Ephemeral
-    });
-}
+                if (!canManageInvoiri) {
+                    return interaction.reply({
+                        content: '❌ Nu ai permisiunea sa aprobi invoiri.',
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
                 
-    const embed =
-        EmbedBuilder.from(
-            interaction.message.embeds[0]
-        );
+                const embed =
+                    EmbedBuilder.from(
+                        interaction.message.embeds[0]
+                    );
 
-    embed.spliceFields(6, 1, {
-        name: '📌 Status',
-        value: '✅ ACCEPTED'
-    });
+                embed.spliceFields(6, 1, {
+                    name: '📌 Status',
+                    value: '✅ ACCEPTED'
+                });
 
-    await interaction.update({
-        embeds: [embed],
-        components: []
-    });
+                await interaction.update({
+                    embeds: [embed],
+                    components: []
+                });
 
-    const userId =
-        embed.footer.text.replace(
-            'User ID: ',
-            ''
-        );
+                const userId =
+                    embed.footer.text.replace(
+                        'User ID: ',
+                        ''
+                    );
 
-    const logChannel =
-        await client.channels.fetch(
-            invoireLogsChannelId
-        );
+                const logChannel =
+                    await client.channels.fetch(
+                        invoireLogsChannelId
+                    );
 
-    await logChannel.send({
-        embeds: [
-            new EmbedBuilder()
-                .setColor('Green')
-                .setTitle('✅ INVOIRE APROBATA')
-                .setDescription(
-                    `📢 Supervizorul ${interaction.user.tag} a ACCEPTAT invoirea lui <@${userId}>`
-                )
-                .addFields(
-                    {
-                        name: '🆔 ID Cerere',
-                        value: embed.fields[0].value
-                    },
-                    {
-                        name: '👤 Membru',
-                        value: `<@${userId}>`
-                    },
-                    {
-                        name: '🛡️ Aprobata de',
-                        value: interaction.user.tag
-                    }
-                )
-        ]
-    });
+                await logChannel.send({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor('Green')
+                            .setTitle('✅ INVOIRE APROBATA')
+                            .setDescription(
+                                `📢 Supervizorul ${interaction.user.tag} a ACCEPTAT invoirea lui <@${userId}>`
+                            )
+                            .addFields(
+                                {
+                                    name: '🆔 ID Cerere',
+                                    value: embed.fields[0].value
+                                },
+                                {
+                                    name: '👤 Membru',
+                                    value: `<@${userId}>`
+                                },
+                                {
+                                    name: '🛡️ Aprobata de',
+                                    value: interaction.user.tag
+                                }
+                            )
+                    ]
+                });
 
-    return;
-}
+                return;
+            }
 
-if (
-    interaction.customId.startsWith('reject_invoire_')
-) {
+            if (interaction.customId.startsWith('reject_invoire_')) {
 
-const canManageInvoiri =
-    interaction.member.roles.cache.has(invoireManagerRoleId);
+                const canManageInvoiri =
+                    interaction.member.roles.cache.has(invoireManagerRoleId);
 
-if (!canManageInvoiri) {
-    return interaction.reply({
-        content: '❌ Nu ai permisiunea sa respingi invoiri.',
-        flags: MessageFlags.Ephemeral
-    });
-}
-    
-    const embed =
-        EmbedBuilder.from(
-            interaction.message.embeds[0]
-        );
+                if (!canManageInvoiri) {
+                    return interaction.reply({
+                        content: '❌ Nu ai permisiunea sa respingi invoiri.',
+                        flags: MessageFlags.Ephemeral
+                    });
+                }
+                
+                const embed =
+                    EmbedBuilder.from(
+                        interaction.message.embeds[0]
+                    );
 
-    embed.spliceFields(6, 1, {
-        name: '📌 Status',
-        value: '❌ RESPINSA'
-    });
+                embed.spliceFields(6, 1, {
+                    name: '📌 Status',
+                    value: '❌ RESPINSA'
+                });
 
-    await interaction.update({
-        embeds: [embed],
-        components: []
-    });
+                await interaction.update({
+                    embeds: [embed],
+                    components: []
+                });
 
-    const userId =
-        embed.footer.text.replace(
-            'User ID: ',
-            ''
-        );
+                const userId =
+                    embed.footer.text.replace(
+                        'User ID: ',
+                        ''
+                    );
 
-    const logChannel =
-        await client.channels.fetch(
-            invoireLogsChannelId
-        );
+                const logChannel =
+                    await client.channels.fetch(
+                        invoireLogsChannelId
+                    );
 
-    await logChannel.send({
-        embeds: [
-            new EmbedBuilder()
-                .setColor('Red')
-                .setTitle('❌ INVOIRE RESPINSA')
-                .setDescription(
-                    `📢 Supervizorul ${interaction.user.tag} a RESPINS invoirea lui <@${userId}>`
-                )
-                .addFields(
-                    {
-                        name: '🆔 ID Cerere',
-                        value: embed.fields[0].value
-                    },
-                    {
-                        name: '👤 Membru',
-                        value: `<@${userId}>`
-                    },
-                    {
-                        name: '🛡️ Respinsa de',
-                        value: interaction.user.tag
-                    }
-                )
-        ]
-    });
+                await logChannel.send({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor('Red')
+                            .setTitle('❌ INVOIRE RESPINSA')
+                            .setDescription(
+                                `📢 Supervizorul ${interaction.user.tag} a RESPINS invoirea lui <@${userId}>`
+                            )
+                            .addFields(
+                                {
+                                    name: '🆔 ID Cerere',
+                                    value: embed.fields[0].value
+                                },
+                                {
+                                    name: '👤 Membru',
+                                    value: `<@${userId}>`
+                                },
+                                {
+                                    name: '🛡️ Respinsa de',
+                                    value: interaction.user.tag
+                                }
+                            )
+                    ]
+                });
 
-    return;
-}
+                return;
+            }
             
             // =====================================================
             // CV BUTTONS
@@ -1433,7 +1544,7 @@ client.on(Events.MessageCreate, async message => {
 
                 { name: '📅 Luni', value: data.luni },
 
-                { name: '👨‍💼 Angajator', value: data.angajator },
+                { name: '👨💼 Angajator', value: data.angajator },
 
                 { name: '📱 Telefon', value: data.telefon }
             )
@@ -1497,3 +1608,156 @@ client.on(Events.MessageCreate, async message => {
 // ================= LOGIN =================
 
 client.login(token);
+
+// ================= DRUGS & TIGARI CALCULATOR FUNCTIONS =================
+
+const PROD_PRICES = {
+  AMONIAC: 4500,
+  SODIU: 4500,
+  PLIC: 150,
+  FILTRU: 250,
+  FOITA: 250,
+  RASNITA: 200,
+  PACHET_GOL: 100,
+  BRICHETA: 70, 
+  APA: 35,      
+  TIGARI_VREVENU_CLEAN: 5000,
+  TIGARI_VREVENU_DIRTY: 7000
+};
+
+function getCocaData(pieces) {
+  const ratio = pieces / 50;
+  const amoniac = Math.ceil(13 * ratio);
+  const sodiu = Math.ceil(13 * ratio);
+  const plicuri = pieces;
+  const frunze = pieces * 3;
+  const investitie = (amoniac * PROD_PRICES.AMONIAC) + (sodiu * PROD_PRICES.SODIU) + (plicuri * PROD_PRICES.PLIC);
+
+  return {
+    pieces: pieces,
+    amoniac: amoniac,
+    sodiu: sodiu,
+    plicuri: plicuri,
+    frunze: frunze,
+    investitie: investitie
+  };
+}
+
+function getCocaMessage(pieces) {
+  const data = getCocaData(pieces);
+  const estimatedRevenue = pieces * 3750;
+  const profit = estimatedRevenue - data.investitie;
+  const profitPercent = ((profit / estimatedRevenue) * 100).toFixed(1);
+
+  const embed = new EmbedBuilder()
+    .setTitle(`Calcul Producție Coca`)
+    .setColor('#f1c40f')
+    .setDescription(`**Cantitate:** ${data.pieces} bucăți`)
+    .addFields(
+      { name: '🧪 Materiale necesare:', value: `• Amoniac: **${data.amoniac.toLocaleString('en-US')}**\n• Sodiu: **${data.sodiu.toLocaleString('en-US')}**\n• Plicuri: **${data.plicuri.toLocaleString('en-US')}**\n• Frunze: **${data.frunze.toLocaleString('en-US')}**` },
+      { name: '💰 Investiție Totală:', value: `\`${data.investitie.toLocaleString('en-US')}$\`` },
+      { name: '📈 Profit Estimat:', value: `\`${profit.toLocaleString('en-US')}$\` (${profitPercent}%)` }
+    )
+    .setFooter({ text: "Calcul bazat pe tabelul de producție" });
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`coca:upd:${Math.max(1, pieces - 100)}:m100`).setLabel('-100').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId(`coca:upd:${Math.max(1, pieces - 10)}:m10`).setLabel('-10').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId(`coca:info`).setLabel(`Cantitate: ${pieces}`).setStyle(ButtonStyle.Secondary).setDisabled(true),
+    new ButtonBuilder().setCustomId(`coca:upd:${pieces + 10}:p10`).setLabel('+10').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId(`coca:upd:${pieces + 100}:p100`).setLabel('+100').setStyle(ButtonStyle.Success)
+  );
+  return { embeds: [embed], components: [row] };
+}
+
+function getCrackData(pieces) {
+  const ratio = pieces / 100;
+  const coca = Math.ceil(50 * ratio);
+  const brichete = Math.ceil(50 * ratio);
+  const apa = Math.ceil(100 * ratio);
+  const investitie = (brichete * PROD_PRICES.BRICHETA) + (apa * PROD_PRICES.APA);
+  const murdari = Math.ceil(3179 * pieces);
+  const curati = Math.ceil(2225 * pieces);
+  const costCoca = coca * 2500;
+  const profit = curati - investitie - costCoca;
+
+  return {
+    pieces: pieces,
+    coca: coca,
+    brichete: brichete,
+    apa: apa,
+    investitie: investitie,
+    murdari: murdari,
+    curati: curati,
+    profit: profit
+  };
+}
+
+function getCrackMessage(pieces) {
+  const data = getCrackData(pieces);
+  const profitPercent = ((data.profit / data.curati) * 100).toFixed(1);
+
+  const embed = new EmbedBuilder()
+    .setTitle(`Calcul Producție Crack`)
+    .setColor('#e74c3c')
+    .setDescription(`**Cantitate:** ${data.pieces} bucăți`)
+    .addFields(
+      { name: '💎 Materiale necesare:', value: `• Coca: **${data.coca.toLocaleString('en-US')}**\n• Brichete: **${data.brichete.toLocaleString('en-US')}**\n• Apă: **${data.apa.toLocaleString('en-US')}**` },
+      { name: '💰 Investiție (Brichete+Apă):', value: `\`${data.investitie.toLocaleString('en-US')}$\`` },
+      { name: '💵 Bani Curați (Vânzare):', value: `\`${data.curati.toLocaleString('en-US')}$\`` },
+      { name: '📈 Profit:', value: `\`${data.profit.toLocaleString('en-US')}$\` (${profitPercent}%)` }
+    )
+    .setFooter({ text: "Profitul include scăderea costului de Coca" });
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`crack:upd:${Math.max(1, pieces - 100)}:m100`).setLabel('-100').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId(`crack:upd:${Math.max(1, pieces - 10)}:m10`).setLabel('-10').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId(`crack:info`).setLabel(`Cantitate: ${pieces}`).setStyle(ButtonStyle.Secondary).setDisabled(true),
+    new ButtonBuilder().setCustomId(`crack:upd:${pieces + 10}:p10`).setLabel('+10').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId(`crack:upd:${pieces + 100}:p100`).setLabel('+100').setStyle(ButtonStyle.Success)
+  );
+  return { embeds: [embed], components: [row] };
+}
+
+function getTigariMessage(packs) {
+  const data = {
+    packs: packs,
+    tutun: packs * 20,
+    rasnite: packs * 2,
+    pacheteGole: packs * 1,
+    filtre: packs * 5,
+    foite: packs * 5
+  };
+
+  const costRasnite = data.rasnite * PROD_PRICES.RASNITA;
+  const costPachete = data.pacheteGole * PROD_PRICES.PACHET_GOL;
+  const costFiltre = data.filtre * PROD_PRICES.FILTRU;
+  const costFoite = data.foite * PROD_PRICES.FOITA;
+  const totalInvestitie = costRasnite + costPachete + costFiltre + costFoite;
+  
+  const revenueClean = packs * PROD_PRICES.TIGARI_VREVENU_CLEAN;
+  const revenueDirty = packs * PROD_PRICES.TIGARI_VREVENU_DIRTY;
+  const profitClean = revenueClean - totalInvestitie;
+
+  const embed = new EmbedBuilder()
+    .setTitle(`🚬 Calcul Producție Țigări`)
+    .setColor('#95a5a6')
+    .setDescription(`**Cantitate:** ${data.packs} pachete (total ${data.packs * 20} țigări)`)
+    .addFields(
+      { name: '🌿 Tutun & Procesare:', value: `• Tutun mărunțit: **${data.tutun.toLocaleString('en-US')}**\n• Râșnițe necesare: **${data.rasnite.toLocaleString('en-US')}** (\`${costRasnite.toLocaleString('en-US')}$\`)` },
+      { name: '📦 Ambalare & Filtre:', value: `• Pachete gole: **${data.pacheteGole.toLocaleString('en-US')}** (\`${costPachete.toLocaleString('en-US')}$\`)\n• Filtre: **${data.filtre.toLocaleString('en-US')}** (\`${costFiltre.toLocaleString('en-US')}$\`)\n• Foițe: **${data.foite.toLocaleString('en-US')}** (\`${costFoite.toLocaleString('en-US')}$\`)` },
+      { name: '💰 Investiție Totală (Bani Curați):', value: `\`${totalInvestitie.toLocaleString('en-US')}$\`` },
+      { name: '💵 Vânzare (Venit):', value: `• Bani Curați: **${revenueClean.toLocaleString('en-US')}$**\n• Bani Murdari: **${revenueDirty.toLocaleString('en-US')}$**`, inline: true },
+      { name: '📈 Profit (Curați):', value: `\`${profitClean.toLocaleString('en-US')}$\``, inline: true }
+    )
+    .setFooter({ text: "1 pachet = 20 tutun, 5 filtre, 5 foițe" });
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`tigari:upd:${Math.max(1, packs - 10)}:m10`).setLabel('-10').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId(`tigari:upd:${Math.max(1, packs - 1)}:m1`).setLabel('-1').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId(`tigari:info`).setLabel(`Cantitate: ${packs} pachete`).setStyle(ButtonStyle.Secondary).setDisabled(true),
+    new ButtonBuilder().setCustomId(`tigari:upd:${packs + 1}:p1`).setLabel('+1').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId(`tigari:upd:${packs + 10}:p10`).setLabel('+10').setStyle(ButtonStyle.Success)
+  );
+  return { embeds: [embed], components: [row] };
+}
